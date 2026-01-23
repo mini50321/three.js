@@ -1,0 +1,47 @@
+[
+    {
+        "id": "exp_696e82487243f",
+        "title": "Ray hope",
+        "subject": "Physics",
+        "class": "11",
+        "models": [],
+        "steps": [
+            {
+                "instruction": "new bottle shake",
+                "equipment": "bottle",
+                "action": "tilt"
+            },
+            {
+                "instruction": "stirr",
+                "equipment": "rod",
+                "action": "tilt"
+            }
+        ]
+    },
+    {
+        "id": "exp_6972349d62720",
+        "title": "Test Experiment",
+        "subject": "Chemistry",
+        "class": "11",
+        "models": [
+            "\/admin\/uploads\/models\/Beaker.glb"
+        ],
+        "steps": [
+            {
+                "instruction": "Pick up the beaker",
+                "equipment": "Beaker",
+                "action": "tilt"
+            },
+            {
+                "instruction": "Pour liquid",
+                "equipment": "Beaker",
+                "action": "pour"
+            },
+            {
+                "instruction": "Heat the beake",
+                "equipment": "Beaker",
+                "action": "heat"
+            }
+        ]
+    }
+]

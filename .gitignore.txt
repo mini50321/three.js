@@ -1,0 +1,36 @@
+# PHP
+*.log
+*.cache
+.htaccess
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Uploads (if you want to exclude uploaded files)
+# lab/admin/uploads/
+
+# Environment files
+.env
+.env.local
+
+# Node modules (if any)
+node_modules/
+package-lock.json
+
+# Large model files (optional - uncomment if models are too large for Git)
+# lab/assets/models/*.glb
+

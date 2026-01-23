@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Lab - Experiment</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        #container {
+            display: flex;
+            height: 100vh;
+        }
+
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            background: #2a2a2a;
+        }
+
+        #sidebar {
+            width: 350px;
+            background: #252525;
+            padding: 20px;
+            overflow-y: auto;
+            border-left: 1px solid #333;
+        }
+
+        h2 {
+            margin-bottom: 20px;
+            color: #4CAF50;
+        }
+
+        .step-info {
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #4CAF50;
+        }
+
+        .step-info h3 {
+            margin-bottom: 10px;
+            color: #4CAF50;
+        }
+
+        .step-info p {
+            color: #ccc;
+            line-height: 1.6;
+        }
+
+        .controls {
+            margin-top: 20px;
+        }
+
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #45a049;
+        }
+
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+
+        .score-panel {
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .score-panel h3 {
+            margin-bottom: 10px;
+            color: #4CAF50;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #222;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            transition: width 0.3s;
+        }
+
+        .feedback {
+            background: #444;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .feedback-item {
+            padding: 8px;
+            margin-bottom: 5px;
+            border-left: 3px solid #ff9800;
+            background: #333;
+        }
+
+        .feedback-item.error {
+            border-left-color: #f44336;
+        }
+
+        .feedback-item.success {
+            border-left-color: #4CAF50;
+        }
+
+        .measurements {
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .measurement-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #444;
+        }
+
+        .measurement-item:last-child {
+            border-bottom: none;
+        }
+
+        @media (max-width: 768px) {
+            #container {
+                flex-direction: column;
+            }
+
+            #sidebar {
+                width: 100%;
+                height: 40vh;
+            }
+
+            #canvas-container {
+                height: 60vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="canvas-container"></div>
+        <div id="sidebar">
+            <h2 id="experiment-title">Experiment</h2>
+            
+            <div class="score-panel">
+                <h3>Progress</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                </div>
+                <p>Score: <span id="score">0</span> / <span id="max-score">0</span></p>
+                <p>Steps: <span id="current-step">0</span> / <span id="total-steps">0</span></p>
+            </div>
+
+            <div class="step-info" id="step-info">
+                <h3>Current Step</h3>
+                <p id="step-instruction">Click Start to begin the experiment</p>
+            </div>
+
+            <div class="controls">
+                <button id="start-btn">Start Experiment</button>
+                <button id="reset-btn" disabled>Reset</button>
+                <button id="validate-btn" disabled>Validate Step</button>
+            </div>
+
+            <div class="feedback" id="feedback">
+                <h3>Feedback</h3>
+                <div id="feedback-items"></div>
+            </div>
+
+            <div class="measurements" id="measurements">
+                <h3>Measurements</h3>
+                <div id="measurement-items"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module">
+        import { ExperimentEngine } from './js/engine/ExperimentEngine.js';
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const experimentId = urlParams.get('id');
+
+        let engine = null;
+        let experimentConfig = null;
+
+        async function loadExperiment() {
+            try {
+                const response = await fetch(`admin/experiments.json`);
+                const experiments = await response.json();
+                experimentConfig = experiments.find(exp => exp.id === experimentId);
+                
+                if (!experimentConfig) {
+                    document.getElementById('experiment-title').textContent = 'Experiment Not Found';
+                    return;
+                }
+
+                if (experimentConfig.models) {
+                    experimentConfig.models = experimentConfig.models.map(path => {
+                        if (path.startsWith('/admin/')) {
+                            const filename = path.split('/').pop();
+                            return `assets/models/${filename}`;
+                        }
+                        if (path.includes('uploads/models/')) {
+                            const filename = path.split('/').pop();
+                            return `assets/models/${filename}`;
+                        }
+                        return path;
+                    });
+                }
+                
+                if (!experimentConfig.table) {
+                    experimentConfig.table = {
+                        width: 10,
+                        height: 0.1,
+                        depth: 10,
+                        y: 0
+                    };
+                }
+
+                document.getElementById('experiment-title').textContent = experimentConfig.title;
+                document.getElementById('total-steps').textContent = experimentConfig.steps?.length || 0;
+                document.getElementById('max-score').textContent = experimentConfig.steps?.reduce((sum, step) => sum + (step.points || 10), 0) || 0;
+
+                engine = new ExperimentEngine('canvas-container', experimentConfig);
+                updateMeasurements();
+            } catch (error) {
+                console.error('Failed to load experiment:', error);
+                document.getElementById('experiment-title').textContent = 'Error Loading Experiment';
+            }
+        }
+
+        function updateStepInfo() {
+            const stepInfo = engine.getCurrentStepInfo();
+            if (stepInfo) {
+                document.getElementById('step-instruction').textContent = stepInfo.instruction || 'No instruction';
+            } else {
+                document.getElementById('step-instruction').textContent = 'Experiment Complete!';
+            }
+        }
+
+        function updateProgress() {
+            const progress = engine.getProgress();
+            document.getElementById('progress-fill').style.width = progress + '%';
+            document.getElementById('current-step').textContent = engine.currentStep;
+            document.getElementById('score').textContent = engine.getScore();
+        }
+
+        function updateFeedback() {
+            const feedbackItems = document.getElementById('feedback-items');
+            feedbackItems.innerHTML = '';
+            
+            engine.getFeedback().slice(-5).forEach(fb => {
+                const item = document.createElement('div');
+                item.className = 'feedback-item';
+                item.textContent = fb.message || fb;
+                feedbackItems.appendChild(item);
+            });
+        }
+
+        function updateMeasurements() {
+            const measurementItems = document.getElementById('measurement-items');
+            measurementItems.innerHTML = '';
+            
+            if (!engine) return;
+            
+            for (const [name, obj] of engine.objects) {
+                if (obj.properties.isContainer) {
+                    const volume = engine.measurements.volume[name] || 0;
+                    const item = document.createElement('div');
+                    item.className = 'measurement-item';
+                    item.innerHTML = `<span>${name} Volume:</span><span>${volume.toFixed(1)} ml</span>`;
+                    measurementItems.appendChild(item);
+                }
+                
+                if (obj.properties.temperature > 20) {
+                    const temp = obj.properties.temperature;
+                    const item = document.createElement('div');
+                    item.className = 'measurement-item';
+                    item.innerHTML = `<span>${name} Temp:</span><span>${temp.toFixed(1)} °C</span>`;
+                    measurementItems.appendChild(item);
+                }
+            }
+        }
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            if (engine) {
+                engine.start();
+                document.getElementById('start-btn').disabled = true;
+                document.getElementById('reset-btn').disabled = false;
+                document.getElementById('validate-btn').disabled = false;
+                updateStepInfo();
+            }
+        });
+
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            if (engine) {
+                engine.reset();
+                engine.start();
+                updateStepInfo();
+                updateProgress();
+                updateFeedback();
+                updateMeasurements();
+            }
+        });
+
+        document.getElementById('validate-btn').addEventListener('click', () => {
+            if (engine && engine.isRunning) {
+                const result = engine.validateStep(engine.currentStep);
+                
+                if (result.valid) {
+                    const item = document.createElement('div');
+                    item.className = 'feedback-item success';
+                    item.textContent = result.message || 'Step completed!';
+                    document.getElementById('feedback-items').appendChild(item);
+                } else {
+                    const item = document.createElement('div');
+                    item.className = 'feedback-item error';
+                    item.textContent = result.message || 'Step validation failed';
+                    document.getElementById('feedback-items').appendChild(item);
+                }
+                
+                updateStepInfo();
+                updateProgress();
+                updateFeedback();
+                
+                if (engine.isExperimentComplete()) {
+                    document.getElementById('validate-btn').disabled = true;
+                    const finalScore = engine.getScorePercentage();
+                    alert(`Experiment Complete!\nScore: ${finalScore.toFixed(1)}%`);
+                }
+            }
+        });
+
+        setInterval(() => {
+            if (engine) {
+                updateProgress();
+                updateMeasurements();
+            }
+        }, 100);
+
+        loadExperiment();
+    </script>
+</body>
+</html>
+
