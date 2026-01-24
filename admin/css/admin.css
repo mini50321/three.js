@@ -1,39 +1,264 @@
-body {
-    font-family: Arial;
-    background: #f6f7f8;
-    padding: 20px;
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
 
-h1, h2 {
-    color: #333;
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: #f5f7fa;
+    padding: 0;
+    color: #2c3e50;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 30px 20px;
+}
+
+.header {
+    background: white;
+    padding: 20px 30px;
+    border-radius: 8px;
+    margin-bottom: 30px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+h1 {
+    color: #2c3e50;
+    font-size: 28px;
+    font-weight: 600;
+    margin: 0;
+}
+
+h2 {
+    color: #2c3e50;
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 25px;
+}
+
+h3 {
+    color: #34495e;
+    font-size: 18px;
+    font-weight: 600;
+    margin: 30px 0 15px 0;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e0e6ed;
 }
 
 .btn {
-    background: #1e88e5;
+    display: inline-block;
+    background: #4CAF50;
     color: white;
-    padding: 8px 14px;
+    padding: 10px 20px;
     text-decoration: none;
-    border-radius: 4px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn:hover {
+    background: #45a049;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+}
+
+.btn-secondary {
+    background: #6c757d;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
 }
 
 .danger {
-    color: red;
+    color: #e74c3c;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.danger:hover {
+    text-decoration: underline;
+}
+
+.card {
+    background: white;
+    border-radius: 8px;
+    padding: 30px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    color: #34495e;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+input[type="text"],
+input[type="number"],
+select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.2s;
+    background: white;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+select:focus {
+    outline: none;
+    border-color: #4CAF50;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+
+input[type="file"] {
+    padding: 8px;
+    border: 2px dashed #ddd;
+    border-radius: 6px;
+    width: 100%;
+    background: #f8f9fa;
+    cursor: pointer;
+}
+
+input[type="file"]:hover {
+    border-color: #4CAF50;
+    background: #f0f7f0;
 }
 
 table {
     width: 100%;
     background: white;
     border-collapse: collapse;
-    margin-top: 20px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-th, td {
-    border: 1px solid #ddd;
-    padding: 10px;
+th {
+    background: #f8f9fa;
+    padding: 15px;
+    text-align: center;
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 14px;
+    border-bottom: 2px solid #e0e6ed;
+}
+
+td {
+    padding: 15px;
+    border-bottom: 1px solid #e0e6ed;
+    font-size: 14px;
+    text-align: center;
+}
+
+tr:hover {
+    background: #f8f9fa;
+}
+
+tr:last-child td {
+    border-bottom: none;
 }
 
 .step {
-    background: #fff;
-    padding: 10px;
-    margin-bottom: 10px;
+    background: #f8f9fa;
+    padding: 20px;
+    margin-bottom: 15px;
+    border-radius: 8px;
+    border: 1px solid #e0e6ed;
+    display: grid;
+    grid-template-columns: 2fr 1.5fr 1fr auto;
+    gap: 15px;
+    align-items: center;
+    transition: all 0.2s;
+}
+
+.step:hover {
+    border-color: #4CAF50;
+    box-shadow: 0 2px 8px rgba(76, 175, 80, 0.1);
+}
+
+.step input,
+.step select {
+    margin: 0;
+}
+
+.step button {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+.step button:hover {
+    background: #c0392b;
+}
+
+.actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+}
+
+.actions a {
+    color: #4CAF50;
+    text-decoration: none;
+    font-size: 14px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.actions a:hover {
+    background: #f0f7f0;
+}
+
+.actions .danger {
+    color: #e74c3c;
+}
+
+.actions .danger:hover {
+    background: #fdf2f2;
+}
+
+@media (max-width: 768px) {
+    .step {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
+    .step button {
+        width: 100%;
+    }
+    
+    .header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
 }

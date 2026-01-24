@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Virtual Lab</title>
+    <title>Virtual Laboratory - Interactive 3D Science Experiments</title>
     <style>
         * {
             margin: 0;
@@ -12,139 +12,299 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f7fa;
             min-height: 100vh;
-            padding: 40px 20px;
+            padding: 0;
+            color: #2c3e50;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 50%, #f093fb15 100%);
+            pointer-events: none;
+            z-index: 0;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
+            padding: 80px 30px 60px;
+            position: relative;
+            z-index: 1;
         }
 
         header {
             text-align: center;
-            color: white;
-            margin-bottom: 40px;
+            color: #2c3e50;
+            margin-bottom: 70px;
         }
 
         header h1 {
-            font-size: 3em;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            font-size: 3.5em;
+            font-weight: 700;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.5px;
         }
 
         header p {
-            font-size: 1.2em;
-            opacity: 0.9;
+            font-size: 1.3em;
+            color: #5a6c7d;
+            font-weight: 400;
+            letter-spacing: 0.3px;
         }
 
         .experiments-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 40px;
+            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+            gap: 30px;
+            margin-bottom: 60px;
         }
 
         .experiment-card {
             background: white;
-            border-radius: 12px;
-            padding: 25px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.3s, box-shadow 0.3s;
+            border-radius: 20px;
+            padding: 35px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.08);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             cursor: pointer;
+            border: 1px solid #e8ecf0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .experiment-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transform: scaleX(0);
+            transition: transform 0.4s;
+            transform-origin: left;
         }
 
         .experiment-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 12px rgba(0,0,0,0.2);
+            transform: translateY(-10px);
+            box-shadow: 0 12px 40px rgba(102, 126, 234, 0.15);
+            border-color: #d0d7de;
+        }
+
+        .experiment-card:hover::before {
+            transform: scaleX(1);
         }
 
         .experiment-card h3 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 1.4em;
+            color: #1a202c;
+            margin-bottom: 18px;
+            font-size: 1.7em;
+            font-weight: 700;
+            line-height: 1.2;
         }
 
         .experiment-card .meta {
-            color: #666;
-            font-size: 0.9em;
-            margin-bottom: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 22px;
+            align-items: center;
         }
 
-        .experiment-card .meta span {
-            display: inline-block;
-            margin-right: 15px;
+        .experiment-card .meta span:not(.badge) {
+            font-size: 0.9em;
+            color: #64748b;
+            font-weight: 500;
         }
 
         .experiment-card .badge {
             display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
+            padding: 7px 16px;
+            border-radius: 25px;
             font-size: 0.8em;
-            font-weight: bold;
-            margin-right: 8px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
         .badge.chemistry {
-            background: #e3f2fd;
-            color: #1976d2;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
         }
 
         .badge.physics {
-            background: #f3e5f5;
-            color: #7b1fa2;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
         }
 
         .badge.biology {
-            background: #e8f5e9;
-            color: #388e3c;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
         }
 
         .experiment-card .description {
-            color: #555;
-            line-height: 1.6;
-            margin-bottom: 15px;
+            color: #64748b;
+            line-height: 1.7;
+            margin-bottom: 28px;
+            font-size: 0.95em;
         }
 
         .experiment-card .btn {
-            display: inline-block;
-            background: #667eea;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 10px 20px;
-            border-radius: 6px;
+            padding: 14px 32px;
+            border-radius: 10px;
             text-decoration: none;
-            font-weight: bold;
-            transition: background 0.3s;
+            font-weight: 600;
+            font-size: 0.95em;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .experiment-card .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.25);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
         }
 
         .experiment-card .btn:hover {
-            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .experiment-card .btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .experiment-card .btn span {
+            position: relative;
+            z-index: 1;
         }
 
         .admin-link {
             text-align: center;
-            margin-top: 30px;
+            margin-top: 60px;
+            padding-top: 40px;
+            border-top: 2px solid #e8ecf0;
         }
 
         .admin-link a {
-            color: white;
+            color: #64748b;
             text-decoration: none;
-            font-size: 1.1em;
-            opacity: 0.9;
+            font-size: 1em;
+            font-weight: 500;
+            padding: 12px 28px;
+            border: 2px solid #e8ecf0;
+            border-radius: 10px;
+            display: inline-block;
+            transition: all 0.3s;
+            background: white;
         }
 
         .admin-link a:hover {
-            opacity: 1;
-            text-decoration: underline;
+            background: #f8f9fa;
+            border-color: #d0d7de;
+            color: #475569;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
 
         .loading {
             text-align: center;
-            color: white;
+            color: #64748b;
             font-size: 1.2em;
-            padding: 40px;
+            padding: 80px 20px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.08);
+            border: 1px solid #e8ecf0;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #64748b;
+            padding: 100px 20px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.08);
+            border: 1px solid #e8ecf0;
+        }
+
+        .empty-state h2 {
+            font-size: 2.2em;
+            margin-bottom: 15px;
+            font-weight: 700;
+            color: #1a202c;
+        }
+
+        .empty-state p {
+            font-size: 1.1em;
+            color: #64748b;
+            margin-bottom: 30px;
+        }
+
+        .empty-state a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            padding: 12px 24px;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            display: inline-block;
+            transition: all 0.3s;
+        }
+
+        .empty-state a:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 50px 20px 40px;
+            }
+
+            header h1 {
+                font-size: 2.5em;
+            }
+
+            header p {
+                font-size: 1.1em;
+            }
+
+            .experiments-grid {
+                grid-template-columns: 1fr;
+                gap: 25px;
+            }
+
+            .experiment-card {
+                padding: 28px;
+            }
         }
     </style>
 </head>
@@ -167,13 +327,28 @@
     <script>
         async function loadExperiments() {
             try {
-                const response = await fetch('admin/experiments.json');
-                const experiments = await response.json();
+                const response = await fetch('admin/experiments.json.php');
                 
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status} ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.message || 'Failed to load experiments');
+                }
+                
+                const experiments = Array.isArray(data) ? data : [];
                 const container = document.getElementById('experiments-container');
                 
                 if (experiments.length === 0) {
-                    container.innerHTML = '<div class="loading">No experiments available. <a href="admin/" style="color: white; text-decoration: underline;">Create one in the admin panel</a></div>';
+                    container.className = 'empty-state';
+                    container.innerHTML = `
+                        <h2>No Experiments Available</h2>
+                        <p>Get started by creating your first experiment in the admin panel.</p>
+                        <a href="admin/">Go to Admin Panel</a>
+                    `;
                     return;
                 }
 
@@ -182,20 +357,28 @@
                     <div class="experiment-card">
                         <h3>${escapeHtml(exp.title)}</h3>
                         <div class="meta">
-                            <span class="badge ${exp.subject.toLowerCase()}">${exp.subject}</span>
-                            <span>Class ${exp.class}</span>
+                            <span class="badge ${exp.subject.toLowerCase()}">${escapeHtml(exp.subject)}</span>
+                            <span>Class ${escapeHtml(exp.class)}</span>
                             <span>${exp.steps?.length || 0} steps</span>
                         </div>
                         <div class="description">
-                            ${exp.description || 'Interactive 3D experiment simulation'}
+                            ${escapeHtml(exp.description || 'Interactive 3D experiment simulation')}
                         </div>
-                        <a href="experiment.html?id=${exp.id}" class="btn">Start Experiment</a>
+                        <a href="experiment.html?id=${exp.id}" class="btn">
+                            <span>Start Experiment</span>
+                        </a>
                     </div>
                 `).join('');
             } catch (error) {
                 console.error('Failed to load experiments:', error);
+                let errorMessage = 'Please check the admin panel or try again later.';
+                if (error.message && error.message.includes('JSON')) {
+                    errorMessage = 'Server error: Invalid response from server. Please check if the database is properly configured.';
+                } else if (error.message) {
+                    errorMessage = error.message;
+                }
                 document.getElementById('experiments-container').innerHTML = 
-                    '<div class="loading">Error loading experiments. Please check the admin panel.</div>';
+                    `<div class="empty-state"><h2>Error Loading Experiments</h2><p>${errorMessage}</p><a href="admin/index.php" class="btn" style="margin-top: 15px;">Go to Admin Panel</a></div>`;
             }
         }
 
@@ -209,4 +392,3 @@
     </script>
 </body>
 </html>
-

@@ -1,12 +1,18 @@
 <?php
-$data = json_decode(file_get_contents("experiments.json"), true);
-$id = $_GET['id'];
+require_once __DIR__ . '/classes/Database.php';
 
-$exp = null;
-foreach ($data as $e) {
-    if ($e['id'] === $id) $exp = $e;
+$db = new Database();
+$id = $_GET['id'] ?? null;
+
+if (!$id) {
+    die("Experiment ID required");
 }
-if (!$exp) die("Experiment not found");
+
+$exp = $db->getExperiment($id);
+
+if (!$exp) {
+    die("Experiment not found");
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">

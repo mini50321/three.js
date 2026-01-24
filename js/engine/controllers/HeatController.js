@@ -22,8 +22,19 @@ export class HeatController {
             if (this.isHeating && this.activeObject) {
                 this.activeObject.properties.temperature += this.heatRate;
                 
-                if (this.activeObject.properties.temperature > 200) {
-                    this.activeObject.properties.temperature = 200;
+                const isFlammable = this.engine.isFlammable && this.engine.isFlammable(this.activeObject);
+                const maxTemp = isFlammable ? 300 : 200;
+                
+                if (this.activeObject.properties.temperature > maxTemp) {
+                    this.activeObject.properties.temperature = maxTemp;
+                }
+                
+                if (this.engine.updateLiquidMesh) {
+                    this.engine.updateLiquidMesh(this.activeObject);
+                }
+                
+                if (this.engine.updateEffects) {
+                    this.engine.updateEffects(this.activeObject);
                 }
                 
                 this.animationFrame = requestAnimationFrame(heat);

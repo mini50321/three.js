@@ -1,8 +1,17 @@
 <?php
-$data = json_decode(file_get_contents("experiments.json"), true);
-$id = $_GET['id'];
+require_once __DIR__ . '/classes/Database.php';
 
-$data = array_filter($data, fn($e) => $e['id'] !== $id);
-file_put_contents("experiments.json", json_encode(array_values($data), JSON_PRETTY_PRINT));
+$db = new Database();
+$id = $_GET['id'] ?? null;
 
-header("Location: index.php");
+if (!$id) {
+    die("Experiment ID required");
+}
+
+try {
+    $db->deleteExperiment($id);
+    header("Location: index.php");
+    exit;
+} catch (Exception $e) {
+    die("Error deleting experiment: " . $e->getMessage());
+}

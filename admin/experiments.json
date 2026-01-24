@@ -39,8 +39,27 @@
             },
             {
                 "instruction": "Heat the beake",
-                "equipment": "Beaker",
+                "equipment": "Conical",
                 "action": "heat"
+            },
+            {
+                "instruction": "Stir the mixture",
+                "equipment": "Conical",
+                "action": "stir"
+            }
+        ]
+    },
+    {
+        "id": "exp_6973d00419d17",
+        "title": "act",
+        "subject": "Chemistry",
+        "class": "11",
+        "models": [],
+        "steps": [
+            {
+                "instruction": "Pick up the beaker",
+                "equipment": "Beaker",
+                "action": "tilt"
             }
         ]
     }

@@ -21,6 +21,10 @@ export class DragController {
         this.activeObject = obj;
         this.updatePlane();
         
+        if (this.engine.physicsEnabled && obj.physicsBody && this.engine.physicsManager) {
+            this.engine.physicsManager.enableBody(obj.physicsBody, false);
+        }
+        
         const mouse = new THREE.Vector2();
         const rect = this.engine.renderer.domElement.getBoundingClientRect();
         mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -64,11 +68,21 @@ export class DragController {
                 const beakerBottomOffset = this.activeObject.mesh.position.y - minY;
                 newPosition.y = this.engine.tableBounds.y + beakerBottomOffset;
             }
-            this.activeObject.mesh.position.copy(newPosition);
+            
+            if (this.engine.physicsEnabled && this.activeObject.physicsBody && this.engine.physicsManager) {
+                this.engine.physicsManager.setBodyPosition(this.activeObject.physicsBody, newPosition);
+                this.activeObject.mesh.position.copy(newPosition);
+            } else {
+                this.activeObject.mesh.position.copy(newPosition);
+            }
         }
     }
 
     end() {
+        if (this.activeObject && this.engine.physicsEnabled && this.activeObject.physicsBody && this.engine.physicsManager) {
+            this.engine.physicsManager.enableBody(this.activeObject.physicsBody, true);
+            this.engine.physicsManager.syncBodyToMesh(this.activeObject.physicsBody, this.activeObject.mesh);
+        }
         this.activeObject = null;
     }
 }

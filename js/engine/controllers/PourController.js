@@ -20,8 +20,11 @@ export class PourController {
         this.startMouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         this.startRotation.copy(obj.mesh.rotation);
         
-        if (obj.properties.contents.length === 0) {
+        if (obj.properties.contents.length === 0 && obj.properties.volume > 0) {
+            obj.properties.contents.push({ type: 'water', volume: obj.properties.volume });
+        } else if (obj.properties.contents.length === 0) {
             obj.properties.contents.push({ type: 'water', volume: 500 });
+            obj.properties.volume = 500;
         }
         
         this.findPourTarget();
@@ -70,6 +73,11 @@ export class PourController {
         this.activeObject.mesh.rotation.x = tiltX;
         this.activeObject.mesh.rotation.z = tiltZ;
         
+        if (this.engine.physicsEnabled && this.activeObject.physicsBody && this.engine.physicsManager) {
+            const quaternion = new THREE.Quaternion().setFromEuler(this.activeObject.mesh.rotation);
+            this.engine.physicsManager.setBodyRotation(this.activeObject.physicsBody, quaternion);
+        }
+        
         const tiltAngle = Math.abs(tiltX) + Math.abs(tiltZ);
         if (tiltAngle > 0.3 && this.activeObject.properties.contents.length > 0) {
             this.isPouring = true;
@@ -111,12 +119,31 @@ export class PourController {
                         const existing = this.targetObject.properties.contents.find(c => c.type === content.type);
                         existing.volume += transferVolume;
                     }
+                    
+                    if (this.engine.checkChemicalReaction) {
+                        const reaction = this.engine.checkChemicalReaction(this.targetObject);
+                        if (reaction) {
+                            this.engine.processChemicalReaction(this.targetObject, reaction);
+                        }
+                    }
                 }
             }
+        }
+        
+        this.engine.measurements.volume[this.activeObject.name] = this.engine.calculateVolume(this.activeObject);
+        this.engine.measurements.volume[this.targetObject.name] = this.engine.calculateVolume(this.targetObject);
+        
+        if (this.engine.updateLiquidMesh) {
+            this.engine.updateLiquidMesh(this.activeObject);
+            this.engine.updateLiquidMesh(this.targetObject);
         }
     }
 
     end() {
+        if (this.activeObject && this.engine.physicsEnabled && this.activeObject.physicsBody && this.engine.physicsManager) {
+            const quaternion = new THREE.Quaternion().setFromEuler(this.activeObject.mesh.rotation);
+            this.engine.physicsManager.setBodyRotation(this.activeObject.physicsBody, quaternion);
+        }
         this.activeObject = null;
         this.targetObject = null;
         this.isPouring = false;

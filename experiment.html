@@ -37,6 +37,37 @@
             border-left: 1px solid #333;
         }
 
+        .quality-controls {
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #2196F3;
+        }
+
+        .quality-controls label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #fff;
+        }
+
+        .quality-controls select {
+            width: 100%;
+            padding: 8px;
+            background: #444;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .quality-controls .fps-info {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #aaa;
+        }
+
         h2 {
             margin-bottom: 20px;
             color: #4CAF50;
@@ -75,6 +106,8 @@
             margin-right: 10px;
             margin-bottom: 10px;
             transition: background 0.3s;
+            box-sizing: border-box;
+            width: 100%;
         }
 
         button:hover {
@@ -84,6 +117,28 @@
         button:disabled {
             background: #666;
             cursor: not-allowed;
+        }
+
+        .btn-link {
+            display: block;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            text-decoration: none;
+            transition: background 0.3s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+            width: 100%;
+            text-align: center;
+        }
+
+        .btn-link:hover {
+            background: #45a049;
         }
 
         .score-panel {
@@ -169,9 +224,175 @@
                 height: 60vh;
             }
         }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal {
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 0;
+            max-width: 450px;
+            width: 90%;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.2s ease;
+            border: 1px solid #333;
+        }
+
+        .modal-header {
+            background: #252525;
+            padding: 20px 30px;
+            border-bottom: 1px solid #333;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .modal-header h2 {
+            color: #fff;
+            font-size: 20px;
+            margin: 0;
+            font-weight: 600;
+        }
+
+        .modal-body {
+            padding: 30px;
+        }
+
+        .modal-body .score-section {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .modal-body .score-label {
+            color: #999;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .modal-body .score-display {
+            font-size: 42px;
+            font-weight: 300;
+            color: #4CAF50;
+            margin: 0;
+            line-height: 1;
+        }
+
+        .modal-body .details {
+            color: #bbb;
+            font-size: 14px;
+            line-height: 1.8;
+            border-top: 1px solid #333;
+            padding-top: 20px;
+            margin-top: 20px;
+        }
+
+        .modal-body .details .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .modal-body .details .detail-label {
+            color: #999;
+        }
+
+        .modal-body .details .detail-value {
+            color: #fff;
+            font-weight: 500;
+        }
+
+        .modal-footer {
+            padding: 20px 30px;
+            border-top: 1px solid #333;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            background: #252525;
+            border-radius: 0 0 8px 8px;
+        }
+
+        .modal-btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-weight: 500;
+        }
+
+        .modal-btn-primary {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .modal-btn-primary:hover {
+            background: #45a049;
+        }
+
+        .modal-btn-secondary {
+            background: #333;
+            color: #ccc;
+            border: 1px solid #444;
+        }
+
+        .modal-btn-secondary:hover {
+            background: #3a3a3a;
+        }
     </style>
 </head>
 <body>
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Experiment Complete</h2>
+            </div>
+            <div class="modal-body">
+                <div class="score-section">
+                    <div class="score-label">Score</div>
+                    <div class="score-display" id="modal-score">0%</div>
+                </div>
+                <div class="details" id="modal-details"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn-secondary" id="modal-reset-btn">Try Again</button>
+                <button class="modal-btn modal-btn-primary" id="modal-ok-btn">Close</button>
+            </div>
+        </div>
+    </div>
+
     <div id="container">
         <div id="canvas-container"></div>
         <div id="sidebar">
@@ -195,6 +416,7 @@
                 <button id="start-btn">Start Experiment</button>
                 <button id="reset-btn" disabled>Reset</button>
                 <button id="validate-btn" disabled>Validate Step</button>
+                <a href="../" class="btn-link">Back to Home</a>
             </div>
 
             <div class="feedback" id="feedback">
@@ -228,7 +450,7 @@
 
         async function loadExperiment() {
             try {
-                const response = await fetch(`admin/experiments.json`);
+                const response = await fetch(`admin/experiments.json.php`);
                 const experiments = await response.json();
                 experimentConfig = experiments.find(exp => exp.id === experimentId);
                 
@@ -265,6 +487,50 @@
                 document.getElementById('max-score').textContent = experimentConfig.steps?.reduce((sum, step) => sum + (step.points || 10), 0) || 0;
 
                 engine = new ExperimentEngine('canvas-container', experimentConfig);
+                
+                const qualitySelect = document.getElementById('quality-select');
+                const fpsInfo = document.getElementById('fps-info');
+                
+                if (qualitySelect && fpsInfo) {
+                    qualitySelect.value = engine.performanceManager.quality;
+                    
+                    qualitySelect.addEventListener('change', (e) => {
+                        const quality = e.target.value;
+                        engine.performanceManager.setQuality(quality);
+                        engine.performanceManager.adaptiveQuality = (quality === 'auto');
+                        
+                        const qualitySettings = engine.performanceManager.getQuality();
+                        engine.renderer.setPixelRatio(qualitySettings.pixelRatio);
+                        engine.renderer.shadowMap.enabled = qualitySettings.shadows;
+                        engine.renderer.shadowMap.type = qualitySettings.shadowMapType;
+                        
+                        engine.scene.traverse((child) => {
+                            if (child.isMesh) {
+                                child.castShadow = qualitySettings.shadows;
+                                child.receiveShadow = qualitySettings.shadows;
+                            }
+                        });
+                        
+                        const directionalLight = engine.scene.children.find(child => child.isDirectionalLight);
+                        if (directionalLight) {
+                            directionalLight.castShadow = qualitySettings.shadows;
+                        }
+                    });
+                    
+                    setInterval(() => {
+                        const avgFPS = engine.performanceManager.getAverageFPS();
+                        fpsInfo.textContent = `FPS: ${avgFPS.toFixed(1)}`;
+                        
+                        if (avgFPS < 20) {
+                            fpsInfo.style.color = '#f44336';
+                        } else if (avgFPS < 30) {
+                            fpsInfo.style.color = '#ff9800';
+                        } else {
+                            fpsInfo.style.color = '#4CAF50';
+                        }
+                    }, 1000);
+                }
+                
                 updateMeasurements();
             } catch (error) {
                 console.error('Failed to load experiment:', error);
@@ -368,9 +634,61 @@
                 
                 if (engine.isExperimentComplete()) {
                     document.getElementById('validate-btn').disabled = true;
-                    const finalScore = engine.getScorePercentage();
-                    alert(`Experiment Complete!\nScore: ${finalScore.toFixed(1)}%`);
+                    showCompletionModal();
                 }
+            }
+        });
+
+        function showCompletionModal() {
+            const finalScore = engine.getScorePercentage();
+            const totalScore = engine.getScore();
+            const maxScore = engine.maxScore || 30;
+            const stepsCompleted = engine.currentStep;
+            const totalSteps = engine.config.steps?.length || 0;
+            
+            document.getElementById('modal-score').textContent = finalScore.toFixed(1) + '%';
+            
+            const detailsDiv = document.getElementById('modal-details');
+            detailsDiv.innerHTML = `
+                <div class="detail-row">
+                    <span class="detail-label">Points</span>
+                    <span class="detail-value">${totalScore} / ${maxScore}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Steps Completed</span>
+                    <span class="detail-value">${stepsCompleted} / ${totalSteps}</span>
+                </div>
+            `;
+            
+            const modal = document.getElementById('modal-overlay');
+            modal.classList.add('show');
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('modal-overlay');
+            modal.classList.remove('show');
+        }
+
+        document.getElementById('modal-ok-btn').addEventListener('click', () => {
+            closeModal();
+        });
+
+        document.getElementById('modal-reset-btn').addEventListener('click', () => {
+            closeModal();
+            if (engine) {
+                engine.reset();
+                engine.start();
+                document.getElementById('validate-btn').disabled = false;
+                updateStepInfo();
+                updateProgress();
+                updateFeedback();
+                updateMeasurements();
+            }
+        });
+
+        document.getElementById('modal-overlay').addEventListener('click', (e) => {
+            if (e.target.id === 'modal-overlay') {
+                closeModal();
             }
         });
 

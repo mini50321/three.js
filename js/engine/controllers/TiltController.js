@@ -43,9 +43,18 @@ export class TiltController {
         
         this.activeObject.mesh.rotation.x = tiltX;
         this.activeObject.mesh.rotation.z = tiltZ;
+        
+        if (this.engine.physicsEnabled && this.activeObject.physicsBody && this.engine.physicsManager) {
+            const quaternion = new THREE.Quaternion().setFromEuler(this.activeObject.mesh.rotation);
+            this.engine.physicsManager.setBodyRotation(this.activeObject.physicsBody, quaternion);
+        }
     }
 
     end() {
+        if (this.activeObject && this.engine.physicsEnabled && this.activeObject.physicsBody && this.engine.physicsManager) {
+            const quaternion = new THREE.Quaternion().setFromEuler(this.activeObject.mesh.rotation);
+            this.engine.physicsManager.setBodyRotation(this.activeObject.physicsBody, quaternion);
+        }
         this.activeObject = null;
     }
 }

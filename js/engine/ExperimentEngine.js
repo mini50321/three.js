@@ -6,6 +6,8 @@ import { TiltController } from './controllers/TiltController.js';
 import { PourController } from './controllers/PourController.js';
 import { HeatController } from './controllers/HeatController.js';
 import { StirController } from './controllers/StirController.js';
+import { PerformanceManager } from './PerformanceManager.js';
+import { PhysicsManager } from './PhysicsManager.js';
 
 export class ExperimentEngine {
     constructor(containerId, config) {
@@ -20,10 +22,15 @@ export class ExperimentEngine {
         this.objects = new Map();
         this.interactions = new Map();
         this.activeController = null;
+        this.selectedObject = null;
+        this.keyboardTiltSpeed = 0.005;
+        this.keysPressed = new Set();
+        this.laboratory = null;
         this.tableSurface = null;
         this.tableBounds = null;
         this.particleSystems = new Map();
         this.effects = new Map();
+        this.liquidMeshes = new Map();
         this.measurements = {
             volume: {},
             mass: {},
@@ -37,6 +44,13 @@ export class ExperimentEngine {
         this.feedback = [];
         this.stepHistory = [];
         this.isRunning = false;
+        this.initialState = null;
+        this.performanceManager = new PerformanceManager();
+        this.physicsManager = new PhysicsManager();
+        this.lastUpdateTime = 0;
+        this.updateThrottleCounter = 0;
+        this.physicsEnabled = true;
+        this.tableBody = null;
         
         this.init();
     }
@@ -47,6 +61,7 @@ export class ExperimentEngine {
         this.setupRenderer();
         this.setupControls();
         this.setupLighting();
+        await this.physicsManager.init();
         await this.loadTable();
         await this.loadModels();
         this.animate();
@@ -58,6 +73,43 @@ export class ExperimentEngine {
         this.scene.fog = new THREE.Fog(0xf0f0f0, 10, 50);
     }
 
+    async loadLaboratory() {
+        const laboratoryPath = this.config.laboratoryModel || 'assets/models/Laboratory (2).glb';
+        const loader = new GLTFLoader();
+        
+        try {
+            const gltf = await loader.loadAsync(laboratoryPath);
+            const laboratory = gltf.scene;
+            
+            const shadowsEnabled = this.performanceManager.getShadowsEnabled();
+            laboratory.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = shadowsEnabled;
+                    child.receiveShadow = shadowsEnabled;
+                }
+                
+                const name = (child.name || '').toLowerCase();
+                const userDataName = (child.userData?.name || '').toLowerCase();
+                
+                if (name.includes('conical') || userDataName.includes('conical')) {
+                    child.visible = false;
+                    if (child.isMesh) {
+                        child.material = new THREE.MeshBasicMaterial({ visible: false });
+                    }
+                }
+            });
+            
+            laboratory.position.set(0, 0, 0);
+            this.laboratory = laboratory;
+            this.scene.add(laboratory);
+            
+            return true;
+        } catch (error) {
+            console.warn('Failed to load laboratory model:', error);
+            return false;
+        }
+    }
+
     async loadTable() {
         const tablePath = this.config.tableModel || 'assets/models/Table1.glb';
         const loader = new GLTFLoader();
@@ -66,10 +118,11 @@ export class ExperimentEngine {
             const gltf = await loader.loadAsync(tablePath);
             const table = gltf.scene;
             
+            const shadowsEnabled = this.performanceManager.getShadowsEnabled();
             table.traverse((child) => {
                 if (child.isMesh) {
-                    child.castShadow = true;
-                    child.receiveShadow = true;
+                    child.castShadow = shadowsEnabled;
+                    child.receiveShadow = shadowsEnabled;
                 }
             });
             
@@ -79,18 +132,24 @@ export class ExperimentEngine {
             const minY = box.min.y;
             const maxY = box.max.y;
             
+            table.position.set(0, 0, 0);
+            
             this.tableSurface = table;
             this.scene.add(table);
             
             const tableTopY = maxY;
             
             this.tableBounds = {
-                minX: box.min.x,
-                maxX: box.max.x,
-                minZ: box.min.z,
-                maxZ: box.max.z,
+                minX: box.min.x + table.position.x,
+                maxX: box.max.x + table.position.x,
+                minZ: box.min.z + table.position.z,
+                maxZ: box.max.z + table.position.z,
                 y: tableTopY
             };
+            
+            if (this.physicsManager && this.physicsManager.world) {
+                this.tableBody = this.physicsManager.createTableBody(table, this.tableBounds);
+            }
             
             return true;
         } catch (error) {
@@ -107,7 +166,7 @@ export class ExperimentEngine {
         const tableMaterial = new THREE.MeshStandardMaterial({ color: 0x8b7355 });
         this.tableSurface = new THREE.Mesh(tableGeometry, tableMaterial);
         this.tableSurface.position.set(0, tableConfig.y, 0);
-        this.tableSurface.receiveShadow = true;
+        this.tableSurface.receiveShadow = this.performanceManager.getShadowsEnabled();
         this.scene.add(this.tableSurface);
 
         this.tableBounds = {
@@ -129,11 +188,18 @@ export class ExperimentEngine {
     }
 
     setupRenderer() {
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        const quality = this.performanceManager.getQuality();
+        this.renderer = new THREE.WebGLRenderer({ 
+            antialias: quality.antialias,
+            powerPreference: 'high-performance',
+            stencil: false,
+            depth: true
+        });
         this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
-        this.renderer.setPixelRatio(window.devicePixelRatio);
-        this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.renderer.setPixelRatio(quality.pixelRatio);
+        this.renderer.shadowMap.enabled = quality.shadows;
+        this.renderer.shadowMap.type = quality.shadowMapType;
+        this.renderer.sortObjects = false;
         this.container.appendChild(this.renderer.domElement);
 
         window.addEventListener('resize', () => this.onWindowResize());
@@ -157,11 +223,24 @@ export class ExperimentEngine {
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         this.scene.add(ambientLight);
 
+        const shadowsEnabled = this.performanceManager.getShadowsEnabled();
+        const quality = this.performanceManager.getQuality();
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
         directionalLight.position.set(10, 10, 5);
-        directionalLight.castShadow = true;
-        directionalLight.shadow.mapSize.width = 2048;
-        directionalLight.shadow.mapSize.height = 2048;
+        directionalLight.castShadow = shadowsEnabled;
+        
+        if (shadowsEnabled) {
+            const shadowMapSize = quality === 'high' ? 2048 : (quality === 'medium' ? 1024 : 512);
+            directionalLight.shadow.mapSize.width = shadowMapSize;
+            directionalLight.shadow.mapSize.height = shadowMapSize;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 50;
+            directionalLight.shadow.camera.left = -10;
+            directionalLight.shadow.camera.right = 10;
+            directionalLight.shadow.camera.top = 10;
+            directionalLight.shadow.camera.bottom = -10;
+        }
+        
         this.scene.add(directionalLight);
 
         const pointLight = new THREE.PointLight(0xffffff, 0.4);
@@ -169,56 +248,130 @@ export class ExperimentEngine {
         this.scene.add(pointLight);
     }
 
-    async loadModels() {
-        if (!this.config.models || this.config.models.length === 0) return;
+    removeConicalObjects() {
+        const objectsToRemove = [];
+        
+        this.scene.traverse((child) => {
+            const name = (child.name || '').toLowerCase();
+            const userDataName = (child.userData?.name || '').toLowerCase();
+            
+            if (name.includes('conical') || userDataName.includes('conical')) {
+                child.visible = false;
+                if (child.isMesh) {
+                    child.material = new THREE.MeshBasicMaterial({ visible: false });
+                }
+                objectsToRemove.push(child);
+            }
+        });
+        
+        
+        for (const [name, obj] of this.objects) {
+            const lowerName = name.toLowerCase();
+            if (lowerName.includes('conical')) {
+                if (obj.mesh) {
+                    obj.mesh.visible = false;
+                    obj.mesh.traverse((child) => {
+                        if (child.isMesh) {
+                            child.visible = false;
+                            child.material = new THREE.MeshBasicMaterial({ visible: false });
+                        }
+                    });
+                }
+                this.scene.remove(obj.mesh);
+                this.objects.delete(name);
+            }
+        }
+    }
 
+    async loadModels() {
         const loader = new GLTFLoader();
         
-        for (const modelConfig of this.config.models) {
-            const modelPath = typeof modelConfig === 'string' ? modelConfig : modelConfig.path;
-            const modelName = typeof modelConfig === 'string' ? this.extractModelName(modelPath) : (modelConfig.name || this.extractModelName(modelPath));
+        const modelsToLoad = [
+            { path: 'assets/models/Beaker.glb', name: 'Beaker' },
+            { path: 'assets/models/Conical.glb', name: 'Conical' }
+        ];
+        
+        for (const modelConfig of modelsToLoad) {
+            const modelPath = modelConfig.path;
+            const modelName = modelConfig.name || this.extractModelName(modelPath);
             
-            if (modelName.toLowerCase().includes('table')) {
+            const lowerName = modelName.toLowerCase();
+            if (lowerName.includes('table') || lowerName.includes('laboratory')) {
                 continue;
             }
             
-            let modelProps = typeof modelConfig === 'object' ? modelConfig.properties || {} : {};
-                
-                const lowerName = modelName.toLowerCase();
-                if (lowerName.includes('beaker') || lowerName.includes('flask') || lowerName.includes('conical') || lowerName.includes('bottle')) {
-                    if (modelProps.isContainer === undefined) modelProps.isContainer = true;
-                    if (modelProps.capacity === undefined) modelProps.capacity = 1000;
-                    if (modelProps.canPour === undefined) modelProps.canPour = true;
-                    if (modelProps.canHeat === undefined) modelProps.canHeat = true;
-                }
+            let modelProps = modelConfig.properties || {};
+            const modelScale = modelConfig.scale || 1;
+            
+            let defaultScale = 1;
+            if (lowerName.includes('beaker') || lowerName.includes('flask') || lowerName.includes('bottle')) {
+                if (modelProps.isContainer === undefined) modelProps.isContainer = true;
+                if (modelProps.capacity === undefined) modelProps.capacity = 1000;
+                if (modelProps.canPour === undefined) modelProps.canPour = true;
+                if (modelProps.canHeat === undefined) modelProps.canHeat = true;
+                defaultScale = 2.5;
+            } else if (lowerName.includes('conical')) {
+                if (modelProps.isContainer === undefined) modelProps.isContainer = true;
+                if (modelProps.capacity === undefined) modelProps.capacity = 1000;
+                if (modelProps.canPour === undefined) modelProps.canPour = true;
+                if (modelProps.canHeat === undefined) modelProps.canHeat = true;
+                defaultScale = 1.5;
+            }
+            
+            const finalScale = modelScale !== 1 ? modelScale : defaultScale;
             
             try {
                 const gltf = await loader.loadAsync(modelPath);
                 const model = gltf.scene;
+                
+                if (finalScale !== 1) {
+                    model.scale.set(finalScale, finalScale, finalScale);
+                }
                 
                 const box = new THREE.Box3().setFromObject(model);
                 const size = box.getSize(new THREE.Vector3());
                 const center = box.getCenter(new THREE.Vector3());
                 const minY = box.min.y;
                 
+                const shadowsEnabled = this.performanceManager.getShadowsEnabled();
                 model.traverse((child) => {
                     if (child.isMesh) {
-                        child.castShadow = true;
-                        child.receiveShadow = true;
+                        child.castShadow = shadowsEnabled;
+                        child.receiveShadow = shadowsEnabled;
                     }
                 });
                 
-                const tableTopY = this.tableBounds.y;
-                const beakerBottomOffset = model.position.y - minY;
-                const beakerY = tableTopY + beakerBottomOffset;
+                const tableTopY = this.tableBounds ? this.tableBounds.y : 0;
+                const modelBottomOffset = Math.abs(minY);
+                const modelY = tableTopY + modelBottomOffset;
                 
-                const initialPosition = modelConfig.position ? 
-                    new THREE.Vector3(modelConfig.position.x || 0, modelConfig.position.y || beakerY, modelConfig.position.z || 0) :
-                    new THREE.Vector3(0, beakerY, 0);
+                let initialPosition;
+                const tableCenterX = this.tableBounds ? (this.tableBounds.minX + this.tableBounds.maxX) / 2 : 0;
+                const tableCenterZ = this.tableBounds ? (this.tableBounds.minZ + this.tableBounds.maxZ) / 2 : 0;
+                
+                if (lowerName.includes('beaker')) {
+                    initialPosition = new THREE.Vector3(tableCenterX - 1, modelY, tableCenterZ);
+                } else if (lowerName.includes('conical')) {
+                    initialPosition = new THREE.Vector3(tableCenterX + 1, modelY, tableCenterZ);
+                } else {
+                    initialPosition = new THREE.Vector3(tableCenterX, modelY, tableCenterZ);
+                }
                 
                 model.position.copy(initialPosition);
                 
-                this.objects.set(modelName, {
+                const initialStateForObject = this.getInitialStateForObject(modelName);
+                
+                const initialVolume = initialStateForObject?.volume !== null && initialStateForObject?.volume !== undefined 
+                    ? initialStateForObject.volume 
+                    : (modelProps.volume || 0);
+                const initialTemperature = initialStateForObject?.temperature !== null && initialStateForObject?.temperature !== undefined 
+                    ? initialStateForObject.temperature 
+                    : (modelProps.temperature || 20);
+                const initialContents = initialStateForObject?.contents && initialStateForObject.contents.length > 0
+                    ? initialStateForObject.contents
+                    : (modelProps.contents || []);
+                
+                const objectData = {
                     mesh: model,
                     name: modelName,
                     originalPosition: initialPosition.clone(),
@@ -228,10 +381,10 @@ export class ExperimentEngine {
                     size: size,
                     center: center,
                     properties: {
-                        volume: modelProps.volume || 0,
-                        mass: modelProps.mass || 0,
-                        temperature: modelProps.temperature || 20,
-                        contents: modelProps.contents || [],
+                        volume: initialVolume,
+                        mass: modelProps.mass || 1,
+                        temperature: initialTemperature,
+                        contents: initialContents,
                         isContainer: modelProps.isContainer || false,
                         capacity: modelProps.capacity || 0,
                         canHeat: modelProps.canHeat !== false,
@@ -242,8 +395,38 @@ export class ExperimentEngine {
                         tiltable: modelProps.tiltable !== false,
                         heatable: modelProps.canHeat !== false,
                         canPour: modelProps.canPour !== false
+                    },
+                    initialState: {
+                        volume: initialVolume,
+                        temperature: initialTemperature,
+                        contents: [...initialContents]
+                    },
+                    physicsBody: null
+                };
+                
+                if (this.physicsManager && this.physicsManager.world) {
+                    const mass = objectData.properties.mass || 1;
+                    let body = null;
+                    
+                    if (lowerName.includes('beaker') || lowerName.includes('conical') || lowerName.includes('flask')) {
+                        body = this.physicsManager.createCylinderBody(model, mass);
+                    } else if (lowerName.includes('sphere') || lowerName.includes('ball')) {
+                        body = this.physicsManager.createSphereBody(model, mass);
+                    } else {
+                        body = this.physicsManager.createBoxBody(model, mass);
                     }
-                });
+                    
+                    if (body) {
+                        objectData.physicsBody = body;
+                        this.physicsManager.addBody(modelName, body);
+                    }
+                }
+                
+                this.objects.set(modelName, objectData);
+                
+                if (objectData.properties.isContainer) {
+                    this.createLiquidMesh(objectData);
+                }
                 
                 this.scene.add(model);
             } catch (error) {
@@ -252,6 +435,30 @@ export class ExperimentEngine {
         }
         
         this.setupInteractions();
+        this.storeInitialState();
+    }
+
+    getInitialStateForObject(objectName) {
+        if (!this.config.initialState || !Array.isArray(this.config.initialState)) {
+            return null;
+        }
+        return this.config.initialState.find(state => 
+            state.objectName && state.objectName.toLowerCase() === objectName.toLowerCase()
+        );
+    }
+
+    storeInitialState() {
+        this.initialState = new Map();
+        for (const [name, obj] of this.objects) {
+            this.initialState.set(name, {
+                volume: obj.properties.volume,
+                temperature: obj.properties.temperature,
+                contents: [...obj.properties.contents],
+                position: obj.mesh.position.clone(),
+                rotation: obj.mesh.rotation.clone(),
+                scale: obj.mesh.scale.clone()
+            });
+        }
     }
 
     setupInteractions() {
@@ -268,6 +475,9 @@ export class ExperimentEngine {
         this.renderer.domElement.addEventListener('touchstart', (e) => this.onTouchStart(e), { passive: false });
         this.renderer.domElement.addEventListener('touchmove', (e) => this.onTouchMove(e), { passive: false });
         this.renderer.domElement.addEventListener('touchend', (e) => this.onTouchEnd(e), { passive: false });
+        
+        window.addEventListener('keydown', (e) => this.onKeyDown(e));
+        window.addEventListener('keyup', (e) => this.onKeyUp(e));
     }
 
     extractModelName(path) {
@@ -286,59 +496,290 @@ export class ExperimentEngine {
     }
 
     animate() {
+        const currentTime = performance.now();
+        const deltaTime = currentTime - this.lastFrameTime;
+        this.lastFrameTime = currentTime;
+        
+        this.performanceManager.updateFPS(deltaTime);
+        
+        const targetFrameTime = this.performanceManager.frameTime;
+        if (deltaTime < targetFrameTime) {
+            requestAnimationFrame(() => this.animate());
+            return;
+        }
+        
         requestAnimationFrame(() => this.animate());
         
+        const width = this.container.clientWidth;
+        const height = this.container.clientHeight;
+        
+        if (this.camera.aspect !== width / height) {
+            this.camera.aspect = width / height;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(width, height);
+        }
+        
         this.controls.update();
-        this.updatePhysics();
+        this.updateThrottleCounter++;
+        if (!this.performanceManager.shouldThrottleUpdate(this.updateThrottleCounter)) {
+            this.updatePhysics();
+        }
+        
         this.renderer.render(this.scene, this.camera);
     }
 
     updatePhysics() {
-        for (const [name, obj] of this.objects) {
-            this.constrainToTable(obj);
+        if (this.physicsEnabled && this.physicsManager && this.physicsManager.world) {
+            const deltaTime = (performance.now() - this.lastUpdateTime) / 1000;
+            this.physicsManager.update(deltaTime);
             
-            if (obj.properties.temperature > 20) {
-                obj.properties.temperature -= 0.05;
+            for (const [name, obj] of this.objects) {
+                if (obj.physicsBody && !this.isObjectBeingDragged(obj)) {
+                    this.physicsManager.syncMeshToBody(obj.mesh, obj.physicsBody);
+                } else if (obj.physicsBody && this.isObjectBeingDragged(obj)) {
+                    this.physicsManager.syncBodyToMesh(obj.physicsBody, obj.mesh);
+                } else {
+                    this.constrainToTable(obj);
+                }
+                
+                if (obj.properties.temperature > 20) {
+                    obj.properties.temperature -= 0.05;
+                }
+                
+                this.updateEffects(obj);
+                this.updateMeasurements(obj);
             }
-            
-            this.updateEffects(obj);
-            this.updateMeasurements(obj);
+        } else {
+            for (const [name, obj] of this.objects) {
+                this.constrainToTable(obj);
+                
+                if (obj.properties.temperature > 20) {
+                    obj.properties.temperature -= 0.05;
+                }
+                
+                this.updateEffects(obj);
+                this.updateMeasurements(obj);
+            }
         }
         
         this.updateParticles();
+        this.handleKeyboardTilt();
+        this.handleCollisions();
+    }
+    
+    isObjectBeingDragged(obj) {
+        return this.activeController && 
+               this.activeController.activeObject === obj;
+    }
+    
+    handleCollisions() {
+        if (!this.physicsEnabled || !this.physicsManager) return;
+        
+        const collisions = this.physicsManager.getCollisions();
+        for (const collision of collisions) {
+            const bodyA = collision.bodyA;
+            const bodyB = collision.bj;
+            
+            for (const [name, obj] of this.objects) {
+                if (obj.physicsBody === bodyA || obj.physicsBody === bodyB) {
+                    this.onObjectCollision(obj, collision);
+                }
+            }
+        }
+    }
+    
+    onObjectCollision(obj, collision) {
+        if (obj.properties.isContainer && obj.properties.contents.length > 0) {
+            const impact = Math.sqrt(
+                collision.normal.x ** 2 + 
+                collision.normal.y ** 2 + 
+                collision.normal.z ** 2
+            );
+            
+            if (impact > 0.5) {
+                const spillAmount = Math.min(impact * 10, obj.properties.volume * 0.1);
+                obj.properties.volume = Math.max(0, obj.properties.volume - spillAmount);
+                this.updateLiquidMesh(obj);
+            }
+        }
+    }
+
+    handleKeyboardTilt() {
+        if (!this.selectedObject) return;
+        
+        const obj = this.selectedObject;
+        const maxTilt = Math.PI / 2;
+        const moveSpeed = 0.01;
+        const verticalSpeed = 0.01;
+        
+        const cameraDirection = new THREE.Vector3();
+        this.camera.getWorldDirection(cameraDirection);
+        cameraDirection.y = 0;
+        cameraDirection.normalize();
+        
+        const cameraRight = new THREE.Vector3();
+        cameraRight.crossVectors(cameraDirection, new THREE.Vector3(0, 1, 0)).normalize();
+        
+        if (this.keysPressed.has('w') || this.keysPressed.has('W')) {
+            const moveVector = cameraDirection.clone().multiplyScalar(moveSpeed);
+            obj.mesh.position.add(moveVector);
+        }
+        
+        if (this.keysPressed.has('s') || this.keysPressed.has('S')) {
+            const moveVector = cameraDirection.clone().multiplyScalar(-moveSpeed);
+            obj.mesh.position.add(moveVector);
+        }
+        
+        if (this.keysPressed.has('a') || this.keysPressed.has('A')) {
+            const moveVector = cameraRight.clone().multiplyScalar(-moveSpeed);
+            obj.mesh.position.add(moveVector);
+        }
+        
+        if (this.keysPressed.has('d') || this.keysPressed.has('D')) {
+            const moveVector = cameraRight.clone().multiplyScalar(moveSpeed);
+            obj.mesh.position.add(moveVector);
+        }
+        
+        if (this.keysPressed.has('i') || this.keysPressed.has('I')) {
+            obj.mesh.position.y += verticalSpeed;
+        }
+        
+        if (this.keysPressed.has('k') || this.keysPressed.has('K')) {
+            const tableTopY = this.tableBounds ? this.tableBounds.y : 0;
+            const box = new THREE.Box3().setFromObject(obj.mesh);
+            const minY = box.min.y;
+            const minAllowedY = tableTopY + Math.abs(obj.mesh.position.y - minY);
+            if (obj.mesh.position.y - verticalSpeed >= minAllowedY) {
+                obj.mesh.position.y -= verticalSpeed;
+            }
+        }
+        
+        if (this.keysPressed.has('j') || this.keysPressed.has('J')) {
+            const cameraUp = new THREE.Vector3(0, 1, 0);
+            const tiltAxis = cameraRight.clone();
+            
+            const currentRotation = obj.mesh.rotation.clone();
+            const quaternion = new THREE.Quaternion().setFromEuler(currentRotation);
+            
+            const tiltQuaternion = new THREE.Quaternion().setFromAxisAngle(tiltAxis, this.keyboardTiltSpeed);
+            quaternion.multiply(tiltQuaternion);
+            
+            const newEuler = new THREE.Euler().setFromQuaternion(quaternion);
+            
+            obj.mesh.rotation.x = THREE.MathUtils.clamp(newEuler.x, -maxTilt, maxTilt);
+            obj.mesh.rotation.z = THREE.MathUtils.clamp(newEuler.z, -maxTilt, maxTilt);
+        }
+        
+        if (this.keysPressed.has('l') || this.keysPressed.has('L')) {
+            const cameraUp = new THREE.Vector3(0, 1, 0);
+            const tiltAxis = cameraRight.clone();
+            
+            const currentRotation = obj.mesh.rotation.clone();
+            const quaternion = new THREE.Quaternion().setFromEuler(currentRotation);
+            
+            const tiltQuaternion = new THREE.Quaternion().setFromAxisAngle(tiltAxis, -this.keyboardTiltSpeed);
+            quaternion.multiply(tiltQuaternion);
+            
+            const newEuler = new THREE.Euler().setFromQuaternion(quaternion);
+            
+            obj.mesh.rotation.x = THREE.MathUtils.clamp(newEuler.x, -maxTilt, maxTilt);
+            obj.mesh.rotation.z = THREE.MathUtils.clamp(newEuler.z, -maxTilt, maxTilt);
+        }
+        
+        this.constrainToTable(obj);
+    }
+
+    onKeyDown(event) {
+        const key = event.key.toLowerCase();
+        if (['w', 'a', 's', 'd', 'i', 'j', 'k', 'l'].includes(key)) {
+            this.keysPressed.add(key);
+            event.preventDefault();
+        }
+    }
+
+    onKeyUp(event) {
+        const key = event.key.toLowerCase();
+        if (['w', 'a', 's', 'd', 'i', 'j', 'k', 'l'].includes(key)) {
+            this.keysPressed.delete(key);
+            event.preventDefault();
+        }
     }
 
     constrainToTable(obj) {
         if (!this.tableBounds || !obj.interactions.draggable) return;
         
-        const box = new THREE.Box3().setFromObject(obj.mesh);
-        const size = box.getSize(new THREE.Vector3());
-        const minY = box.min.y;
-        const position = obj.mesh.position;
-        
-        const tableTopY = this.tableBounds.y;
-        const beakerBottomOffset = position.y - minY;
-        const minAllowedY = tableTopY + beakerBottomOffset;
-        
-        if (position.y < minAllowedY) {
-            position.y = minAllowedY;
-        }
-        
-        const halfWidth = size.x / 2;
-        const halfDepth = size.z / 2;
-        
-        if (position.x - halfWidth < this.tableBounds.minX) {
-            position.x = this.tableBounds.minX + halfWidth;
-        }
-        if (position.x + halfWidth > this.tableBounds.maxX) {
-            position.x = this.tableBounds.maxX - halfWidth;
-        }
-        
-        if (position.z - halfDepth < this.tableBounds.minZ) {
-            position.z = this.tableBounds.minZ + halfDepth;
-        }
-        if (position.z + halfDepth > this.tableBounds.maxZ) {
-            position.z = this.tableBounds.maxZ - halfDepth;
+        if (this.physicsEnabled && obj.physicsBody) {
+            const box = new THREE.Box3().setFromObject(obj.mesh);
+            const size = box.getSize(new THREE.Vector3());
+            const minY = box.min.y;
+            const position = obj.mesh.position;
+            
+            const tableTopY = this.tableBounds.y;
+            const beakerBottomOffset = position.y - minY;
+            const minAllowedY = tableTopY + beakerBottomOffset;
+            
+            if (position.y < minAllowedY && obj.physicsBody) {
+                this.physicsManager.setBodyPosition(obj.physicsBody, new THREE.Vector3(position.x, minAllowedY, position.z));
+            }
+            
+            const halfWidth = size.x / 2;
+            const halfDepth = size.z / 2;
+            
+            let constrained = false;
+            let newX = position.x;
+            let newZ = position.z;
+            
+            if (position.x - halfWidth < this.tableBounds.minX) {
+                newX = this.tableBounds.minX + halfWidth;
+                constrained = true;
+            }
+            if (position.x + halfWidth > this.tableBounds.maxX) {
+                newX = this.tableBounds.maxX - halfWidth;
+                constrained = true;
+            }
+            
+            if (position.z - halfDepth < this.tableBounds.minZ) {
+                newZ = this.tableBounds.minZ + halfDepth;
+                constrained = true;
+            }
+            if (position.z + halfDepth > this.tableBounds.maxZ) {
+                newZ = this.tableBounds.maxZ - halfDepth;
+                constrained = true;
+            }
+            
+            if (constrained && obj.physicsBody) {
+                this.physicsManager.setBodyPosition(obj.physicsBody, new THREE.Vector3(newX, position.y, newZ));
+            }
+        } else {
+            const box = new THREE.Box3().setFromObject(obj.mesh);
+            const size = box.getSize(new THREE.Vector3());
+            const minY = box.min.y;
+            const position = obj.mesh.position;
+            
+            const tableTopY = this.tableBounds.y;
+            const beakerBottomOffset = position.y - minY;
+            const minAllowedY = tableTopY + beakerBottomOffset;
+            
+            if (position.y < minAllowedY) {
+                position.y = minAllowedY;
+            }
+            
+            const halfWidth = size.x / 2;
+            const halfDepth = size.z / 2;
+            
+            if (position.x - halfWidth < this.tableBounds.minX) {
+                position.x = this.tableBounds.minX + halfWidth;
+            }
+            if (position.x + halfWidth > this.tableBounds.maxX) {
+                position.x = this.tableBounds.maxX - halfWidth;
+            }
+            
+            if (position.z - halfDepth < this.tableBounds.minZ) {
+                position.z = this.tableBounds.minZ + halfDepth;
+            }
+            if (position.z + halfDepth > this.tableBounds.maxZ) {
+                position.z = this.tableBounds.maxZ - halfDepth;
+            }
         }
     }
 
@@ -355,6 +796,28 @@ export class ExperimentEngine {
         if (obj.properties.temperature > 80 && !this.effects.has(obj.name + '_smoke')) {
             this.createSmokeEffect(obj);
         }
+        
+        const isFlammable = this.isFlammable(obj);
+        if (isFlammable && obj.properties.temperature > 200 && !this.effects.has(obj.name + '_fire')) {
+            this.createFireEffect(obj);
+        } else if (!isFlammable || obj.properties.temperature <= 180) {
+            if (this.effects.has(obj.name + '_fire')) {
+                this.removeFireEffect(obj);
+            }
+        }
+    }
+    
+    isFlammable(obj) {
+        if (!obj.properties.contents || obj.properties.contents.length === 0) {
+            return false;
+        }
+        
+        const flammableSubstances = ['alcohol', 'ethanol', 'methanol', 'gasoline', 'oil', 'petrol', 'acetone', 'ether'];
+        
+        return obj.properties.contents.some(content => {
+            const type = (content.type || '').toLowerCase();
+            return flammableSubstances.some(flammable => type.includes(flammable));
+        });
     }
 
     createBoilingEffect(obj) {
@@ -364,7 +827,10 @@ export class ExperimentEngine {
             active: true
         };
         
-        for (let i = 0; i < 20; i++) {
+        const baseCount = 20;
+        const particleCount = this.performanceManager.getParticleCount(baseCount);
+        
+        for (let i = 0; i < particleCount; i++) {
             const particle = new THREE.Mesh(
                 new THREE.SphereGeometry(0.02, 8, 8),
                 new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 })
@@ -390,7 +856,10 @@ export class ExperimentEngine {
             active: true
         };
         
-        for (let i = 0; i < 15; i++) {
+        const baseCount = 15;
+        const particleCount = this.performanceManager.getParticleCount(baseCount);
+        
+        for (let i = 0; i < particleCount; i++) {
             const particle = new THREE.Mesh(
                 new THREE.SphereGeometry(0.05, 8, 8),
                 new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.4 })
@@ -409,26 +878,133 @@ export class ExperimentEngine {
         this.effects.set(obj.name + '_smoke', effect);
     }
 
+    createFireEffect(obj) {
+        const effect = {
+            type: 'fire',
+            particles: [],
+            active: true,
+            flickerTime: 0
+        };
+        
+        const fireColors = [0xff4400, 0xff6600, 0xff8800, 0xffaa00, 0xffff00];
+        const baseCount = 30;
+        const particleCount = this.performanceManager.getParticleCount(baseCount);
+        
+        for (let i = 0; i < particleCount; i++) {
+            const color = fireColors[Math.floor(Math.random() * fireColors.length)];
+            const size = 0.03 + Math.random() * 0.04;
+            
+            const particle = new THREE.Mesh(
+                new THREE.SphereGeometry(size, 8, 8),
+                new THREE.MeshBasicMaterial({ 
+                    color: color, 
+                    transparent: true, 
+                    opacity: 0.8 + Math.random() * 0.2 
+                })
+            );
+            
+            const box = obj.boundingBox;
+            const sizeVec = box.getSize(new THREE.Vector3());
+            const minY = box.min.y;
+            
+            particle.position.copy(obj.mesh.position);
+            particle.position.y = minY + sizeVec.y * 0.3 + Math.random() * sizeVec.y * 0.4;
+            particle.position.x += (Math.random() - 0.5) * sizeVec.x * 0.6;
+            particle.position.z += (Math.random() - 0.5) * sizeVec.z * 0.6;
+            
+            particle.velocity = new THREE.Vector3(
+                (Math.random() - 0.5) * 0.08,
+                Math.random() * 0.15 + 0.1,
+                (Math.random() - 0.5) * 0.08
+            );
+            
+            particle.userData.baseY = particle.position.y;
+            particle.userData.flickerSpeed = 0.5 + Math.random() * 0.5;
+            particle.userData.flickerAmount = 0.05 + Math.random() * 0.05;
+            particle.userData.life = 1.0;
+            particle.userData.decayRate = 0.01 + Math.random() * 0.01;
+            
+            this.scene.add(particle);
+            effect.particles.push(particle);
+        }
+        
+        this.effects.set(obj.name + '_fire', effect);
+    }
+
+    removeFireEffect(obj) {
+        const effect = this.effects.get(obj.name + '_fire');
+        if (effect) {
+            effect.particles.forEach(particle => {
+                this.scene.remove(particle);
+                particle.geometry.dispose();
+                particle.material.dispose();
+            });
+            this.effects.delete(obj.name + '_fire');
+        }
+    }
+
     updateParticles() {
         for (const [key, effect] of this.effects) {
             if (!effect.active) continue;
             
-            effect.particles.forEach(particle => {
-                particle.position.add(particle.velocity);
-                particle.material.opacity *= 0.98;
+            if (effect.type === 'fire') {
+                effect.flickerTime += 0.1;
                 
-                if (particle.material.opacity < 0.01) {
-                    particle.position.y = -1000;
-                    particle.velocity.multiplyScalar(0);
-                }
-            });
+                effect.particles.forEach((particle, index) => {
+                    particle.position.add(particle.velocity);
+                    
+                    const flicker = Math.sin(effect.flickerTime * particle.userData.flickerSpeed) * particle.userData.flickerAmount;
+                    particle.position.y = particle.userData.baseY + flicker;
+                    
+                    particle.userData.life -= particle.userData.decayRate;
+                    particle.material.opacity = particle.userData.life * 0.8;
+                    
+                    const sizeScale = 0.8 + Math.sin(effect.flickerTime * particle.userData.flickerSpeed * 2) * 0.2;
+                    particle.scale.set(sizeScale, sizeScale, sizeScale);
+                    
+                    if (particle.userData.life <= 0 || particle.material.opacity < 0.01) {
+                        const obj = this.findObjectByFireKey(key);
+                        if (obj) {
+                            const box = obj.boundingBox;
+                            const sizeVec = box.getSize(new THREE.Vector3());
+                            const minY = box.min.y;
+                            
+                            particle.position.copy(obj.mesh.position);
+                            particle.position.y = minY + sizeVec.y * 0.3 + Math.random() * sizeVec.y * 0.4;
+                            particle.position.x += (Math.random() - 0.5) * sizeVec.x * 0.6;
+                            particle.position.z += (Math.random() - 0.5) * sizeVec.z * 0.6;
+                            
+                            particle.userData.life = 1.0;
+                            particle.material.opacity = 0.8 + Math.random() * 0.2;
+                        }
+                    }
+                });
+            } else {
+                effect.particles.forEach(particle => {
+                    particle.position.add(particle.velocity);
+                    particle.material.opacity *= 0.98;
+                    
+                    if (particle.material.opacity < 0.01) {
+                        particle.position.y = -1000;
+                        particle.velocity.multiplyScalar(0);
+                    }
+                });
+            }
         }
+    }
+
+    findObjectByFireKey(key) {
+        const objectName = key.replace('_fire', '');
+        return this.objects.get(objectName);
     }
 
     updateMeasurements(obj) {
         if (obj.properties.isContainer) {
             const volume = this.calculateVolume(obj);
             this.measurements.volume[obj.name] = volume;
+            if (this.updateLiquidMesh) {
+                this.updateLiquidMesh(obj);
+            }
         }
         
         this.measurements.temperature[obj.name] = obj.properties.temperature;
@@ -444,6 +1020,293 @@ export class ExperimentEngine {
         });
         
         return Math.min(totalVolume, obj.properties.capacity || 1000);
+    }
+
+    calculateLiquidHeight(obj, volume) {
+        if (!obj.properties.isContainer || volume <= 0) return 0;
+        
+        const capacity = obj.properties.capacity || 1000;
+        const fillRatio = Math.min(volume / capacity, 1);
+        
+        const box = obj.boundingBox;
+        const size = box.getSize(new THREE.Vector3());
+        const containerHeight = size.y;
+        const liquidHeight = containerHeight * fillRatio * 0.8;
+        
+        return liquidHeight;
+    }
+
+    checkChemicalReaction(obj) {
+        if (!obj.properties.contents || obj.properties.contents.length < 2) {
+            return null;
+        }
+        
+        const reactions = this.getReactionRules();
+        const contentTypes = obj.properties.contents.map(c => (c.type || '').toLowerCase());
+        
+        for (const reaction of reactions) {
+            const reactants = reaction.reactants.map(r => r.toLowerCase());
+            const hasAllReactants = reactants.every(reactant => 
+                contentTypes.some(type => type.includes(reactant))
+            );
+            
+            if (hasAllReactants) {
+                const isAlreadyReacted = obj.properties.reactedReactions && 
+                    obj.properties.reactedReactions.some(r => r.type === reaction.result.type);
+                
+                if (!isAlreadyReacted) {
+                    return reaction;
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    processChemicalReaction(obj, reaction) {
+        if (!reaction || !obj.properties.contents) return;
+        
+        const reactants = reaction.reactants.map(r => r.toLowerCase());
+        const contentTypes = obj.properties.contents.map(c => (c.type || '').toLowerCase());
+        
+        let totalVolume = 0;
+        const consumedContents = [];
+        
+        obj.properties.contents.forEach((content, index) => {
+            const type = (content.type || '').toLowerCase();
+            const isReactant = reactants.some(reactant => type.includes(reactant));
+            
+            if (isReactant) {
+                totalVolume += content.volume || 0;
+                consumedContents.push(index);
+            }
+        });
+        
+        consumedContents.reverse().forEach(index => {
+            obj.properties.contents.splice(index, 1);
+        });
+        
+        if (reaction.result && totalVolume > 0) {
+            const existingProduct = obj.properties.contents.find(
+                c => (c.type || '').toLowerCase() === (reaction.result.type || '').toLowerCase()
+            );
+            
+            if (existingProduct) {
+                existingProduct.volume += totalVolume;
+            } else {
+                obj.properties.contents.push({
+                    type: reaction.result.type || 'product',
+                    volume: totalVolume
+                });
+            }
+        }
+        
+        if (!obj.properties.reactedReactions) {
+            obj.properties.reactedReactions = [];
+        }
+        obj.properties.reactedReactions.push({
+            type: reaction.result.type,
+            timestamp: Date.now()
+        });
+        
+        this.addFeedback(reaction.message || 'Chemical reaction occurred');
+        
+        if (this.updateLiquidMesh) {
+            this.updateLiquidMesh(obj);
+        }
+    }
+
+    getReactionRules() {
+        if (this.config.reactions && Array.isArray(this.config.reactions)) {
+            return this.config.reactions;
+        }
+        
+        return [
+            {
+                reactants: ['acid', 'base'],
+                result: { type: 'salt', color: 0xffffff },
+                message: 'Acid and base neutralized to form salt'
+            },
+            {
+                reactants: ['acid', 'water'],
+                result: { type: 'acidic_solution', color: 0xff6666 },
+                message: 'Acid diluted in water'
+            },
+            {
+                reactants: ['base', 'water'],
+                result: { type: 'basic_solution', color: 0x6666ff },
+                message: 'Base diluted in water'
+            },
+            {
+                reactants: ['copper', 'acid'],
+                result: { type: 'copper_salt', color: 0x00ff00 },
+                message: 'Copper reacts with acid to form green salt'
+            },
+            {
+                reactants: ['iron', 'acid'],
+                result: { type: 'iron_salt', color: 0xffff00 },
+                message: 'Iron reacts with acid to form yellow salt'
+            },
+            {
+                reactants: ['phenolphthalein', 'base'],
+                result: { type: 'pink_solution', color: 0xff69b4 },
+                message: 'Phenolphthalein turns pink in base'
+            },
+            {
+                reactants: ['litmus', 'acid'],
+                result: { type: 'red_solution', color: 0xff0000 },
+                message: 'Litmus turns red in acid'
+            },
+            {
+                reactants: ['litmus', 'base'],
+                result: { type: 'blue_solution', color: 0x0000ff },
+                message: 'Litmus turns blue in base'
+            }
+        ];
+    }
+
+    getLiquidColor(obj) {
+        if (!obj.properties.contents || obj.properties.contents.length === 0) {
+            return new THREE.Color(0x4a90e2);
+        }
+        
+        const reaction = this.checkChemicalReaction(obj);
+        if (reaction) {
+            return new THREE.Color(reaction.result.color);
+        }
+        
+        const contents = obj.properties.contents;
+        let baseColor = new THREE.Color(0x4a90e2);
+        
+        const colorMap = {
+            'water': 0x4a90e2,
+            'acid': 0xff4444,
+            'base': 0x4444ff,
+            'salt': 0xffffff,
+            'sugar': 0xfff8dc,
+            'alcohol': 0xfff8dc,
+            'oil': 0xffd700,
+            'copper': 0xb87333,
+            'iron': 0x808080,
+            'phenolphthalein': 0xffffff,
+            'litmus': 0x9370db
+        };
+        
+        if (contents.length === 1) {
+            const contentType = contents[0].type?.toLowerCase() || 'water';
+            baseColor = new THREE.Color(colorMap[contentType] || colorMap['water']);
+        } else {
+            let r = 0, g = 0, b = 0;
+            let totalVolume = 0;
+            
+            contents.forEach(content => {
+                const vol = content.volume || 0;
+                totalVolume += vol;
+                const type = (content.type || 'water').toLowerCase();
+                const color = new THREE.Color(colorMap[type] || colorMap['water']);
+                r += color.r * vol;
+                g += color.g * vol;
+                b += color.b * vol;
+            });
+            
+            if (totalVolume > 0) {
+                baseColor = new THREE.Color(r / totalVolume, g / totalVolume, b / totalVolume);
+            }
+        }
+        
+        const temp = obj.properties.temperature || 20;
+        if (temp > 80) {
+            const heatFactor = Math.min((temp - 80) / 120, 1);
+            baseColor.r = Math.min(baseColor.r + heatFactor * 0.3, 1);
+            baseColor.g = Math.max(baseColor.g - heatFactor * 0.2, 0);
+            baseColor.b = Math.max(baseColor.b - heatFactor * 0.3, 0);
+        }
+        
+        return baseColor;
+    }
+
+    createLiquidMesh(obj) {
+        if (!obj.properties.isContainer) return;
+        
+        if (this.liquidMeshes.has(obj.name)) {
+            this.scene.remove(this.liquidMeshes.get(obj.name));
+            this.liquidMeshes.get(obj.name).geometry.dispose();
+            this.liquidMeshes.get(obj.name).material.dispose();
+        }
+        
+        const box = obj.boundingBox;
+        const size = box.getSize(new THREE.Vector3());
+        const minY = box.min.y;
+        
+        const radius = Math.min(size.x, size.z) * 0.4;
+        const segments = this.performanceManager.getGeometrySegments();
+        
+        const volume = this.calculateVolume(obj);
+        const liquidHeight = this.calculateLiquidHeight(obj, volume);
+        
+        if (liquidHeight <= 0) {
+            return;
+        }
+        
+        const geometry = new THREE.CylinderGeometry(radius, radius, liquidHeight, segments);
+        const color = this.getLiquidColor(obj);
+        const material = new THREE.MeshStandardMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0.7,
+            side: THREE.DoubleSide,
+            roughness: 0.3,
+            metalness: 0.1
+        });
+        
+        const liquidMesh = new THREE.Mesh(geometry, material);
+        liquidMesh.position.copy(obj.mesh.position);
+        liquidMesh.position.y = minY + liquidHeight / 2;
+        liquidMesh.userData.isLiquid = true;
+        liquidMesh.userData.containerName = obj.name;
+        
+        this.liquidMeshes.set(obj.name, liquidMesh);
+        this.scene.add(liquidMesh);
+    }
+
+    updateLiquidMesh(obj) {
+        if (!obj.properties.isContainer) return;
+        
+        const liquidMesh = this.liquidMeshes.get(obj.name);
+        if (!liquidMesh) {
+            this.createLiquidMesh(obj);
+            return;
+        }
+        
+        const volume = this.calculateVolume(obj);
+        const liquidHeight = this.calculateLiquidHeight(obj, volume);
+        
+        if (liquidHeight <= 0) {
+            this.scene.remove(liquidMesh);
+            liquidMesh.geometry.dispose();
+            liquidMesh.material.dispose();
+            this.liquidMeshes.delete(obj.name);
+            return;
+        }
+        
+        const box = obj.boundingBox;
+        const size = box.getSize(new THREE.Vector3());
+        const minY = box.min.y;
+        const radius = Math.min(size.x, size.z) * 0.4;
+        
+        if (Math.abs(liquidMesh.geometry.parameters.height - liquidHeight) > 0.01) {
+            liquidMesh.geometry.dispose();
+            const segments = this.performanceManager.getGeometrySegments();
+            liquidMesh.geometry = new THREE.CylinderGeometry(radius, radius, liquidHeight, segments);
+        }
+        
+        liquidMesh.position.copy(obj.mesh.position);
+        liquidMesh.position.y = minY + liquidHeight / 2;
+        
+        const color = this.getLiquidColor(obj);
+        liquidMesh.material.color.copy(color);
+        
+        liquidMesh.rotation.copy(obj.mesh.rotation);
     }
 
     onMouseDown(event) {
@@ -534,6 +1397,7 @@ export class ExperimentEngine {
     }
 
     handleInteractionStart(obj, event) {
+        this.selectedObject = obj;
         console.log('handleInteractionStart', obj.name, this.isRunning, obj.interactions);
         
         if (this.isRunning) {
@@ -861,9 +1725,31 @@ export class ExperimentEngine {
             obj.mesh.position.copy(obj.originalPosition);
             obj.mesh.rotation.copy(obj.originalRotation);
             obj.mesh.scale.copy(obj.originalScale);
-            obj.properties.temperature = obj.properties.temperature || 20;
-            obj.properties.contents = [];
+            
+            if (this.physicsEnabled && obj.physicsBody && this.physicsManager) {
+                this.physicsManager.setBodyPosition(obj.physicsBody, obj.originalPosition);
+                const quaternion = new THREE.Quaternion().setFromEuler(obj.originalRotation);
+                this.physicsManager.setBodyRotation(obj.physicsBody, quaternion);
+            }
+            
+            if (this.initialState && this.initialState.has(name)) {
+                const initialState = this.initialState.get(name);
+                obj.properties.volume = initialState.volume;
+                obj.properties.temperature = initialState.temperature;
+                obj.properties.contents = [...initialState.contents];
+            } else {
+                obj.properties.temperature = obj.properties.temperature || 20;
+                obj.properties.contents = [];
+            }
+            
             obj.properties.stirCount = 0;
+            
+            if (this.measurements.volume) {
+                this.measurements.volume[name] = obj.properties.volume;
+            }
+            if (this.measurements.temperature) {
+                this.measurements.temperature[name] = obj.properties.temperature;
+            }
         }
         
         for (const [key, effect] of this.effects) {
@@ -874,6 +1760,19 @@ export class ExperimentEngine {
             });
         }
         this.effects.clear();
+        
+        for (const [name, liquidMesh] of this.liquidMeshes) {
+            this.scene.remove(liquidMesh);
+            liquidMesh.geometry.dispose();
+            liquidMesh.material.dispose();
+        }
+        this.liquidMeshes.clear();
+        
+        for (const [name, obj] of this.objects) {
+            if (obj.properties.isContainer) {
+                this.createLiquidMesh(obj);
+            }
+        }
     }
 
     getCurrentStepInfo() {

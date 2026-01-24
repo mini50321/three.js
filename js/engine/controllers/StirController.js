@@ -13,56 +13,59 @@ export class StirController {
 
     start(obj, event) {
         this.activeObject = obj;
-        this.startMouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        this.startMouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        const rect = this.engine.renderer.domElement.getBoundingClientRect();
+        this.startMouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        this.startMouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         this.lastPosition.copy(this.startMouse);
         this.stirCount = obj.properties.stirCount || 0;
         this.totalDistance = 0;
+        
+        if (!obj.originalRotation) {
+            obj.originalRotation = obj.mesh.rotation.clone();
+        }
     }
 
     update(event) {
         if (!this.activeObject) return;
         
+        const rect = this.engine.renderer.domElement.getBoundingClientRect();
         const currentMouse = new THREE.Vector2();
-        currentMouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        currentMouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        currentMouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        currentMouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         
+        const deltaX = currentMouse.x - this.lastPosition.x;
+        const deltaY = currentMouse.y - this.lastPosition.y;
         const distance = currentMouse.distanceTo(this.lastPosition);
         this.totalDistance += distance;
+        
+        if (distance > 0.01) {
+            const angle = Math.atan2(deltaY, deltaX);
+            const rotationSpeed = distance * 2;
+            
+            this.activeObject.mesh.rotation.y += rotationSpeed;
+            
+            const tiltAmount = Math.min(distance * 0.5, 0.1);
+            this.activeObject.mesh.rotation.x = Math.sin(angle) * tiltAmount;
+            this.activeObject.mesh.rotation.z = Math.cos(angle) * tiltAmount;
+        }
         
         if (this.totalDistance >= this.minStirDistance) {
             this.stirCount++;
             this.activeObject.properties.stirCount = this.stirCount;
             this.totalDistance = 0;
-            
-            this.animateStir();
         }
         
         this.lastPosition.copy(currentMouse);
     }
 
-    animateStir() {
-        if (!this.activeObject) return;
-        
-        const originalRotation = this.activeObject.mesh.rotation.y;
-        let angle = 0;
-        const maxAngle = Math.PI / 8;
-        
-        const animate = () => {
-            angle += 0.2;
-            if (angle < Math.PI * 2) {
-                this.activeObject.mesh.rotation.y = originalRotation + Math.sin(angle) * maxAngle;
-                requestAnimationFrame(animate);
-            } else {
-                this.activeObject.mesh.rotation.y = originalRotation;
-            }
-        };
-        animate();
-    }
-
     end() {
         if (this.activeObject) {
             this.activeObject.properties.stirCount = this.stirCount;
+            
+            if (this.activeObject.originalRotation) {
+                this.activeObject.mesh.rotation.x = this.activeObject.originalRotation.x;
+                this.activeObject.mesh.rotation.z = this.activeObject.originalRotation.z;
+            }
         }
         this.activeObject = null;
         this.stirCount = 0;
