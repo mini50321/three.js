@@ -1,3 +1,5 @@
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
 export class PhysicsManager {
     constructor() {
         this.world = null;
@@ -11,33 +13,77 @@ export class PhysicsManager {
         this.quaternionNormalizeFast = false;
         this.solverIterations = 10;
         this.broadphase = null;
-        this.init();
+        this.CANNON = null;
     }
 
     async init() {
-        const CANNON = await this.loadCannon();
-        this.CANNON = CANNON;
+        this.CANNON = await this.loadCannon();
         this.createWorld();
     }
 
     async loadCannon() {
+        // Check if already loaded
         if (window.CANNON) {
             return window.CANNON;
         }
 
+        // Try loading from jsDelivr (using version 0.6.2 which is known to work)
         return new Promise((resolve, reject) => {
             const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/cannon@0.20.0/build/cannon.min.js';
+            script.src = 'https://cdn.jsdelivr.net/npm/cannon@0.6.2/build/cannon.min.js';
+            script.async = true;
+            script.crossOrigin = 'anonymous';
+            
             script.onload = () => {
-                if (window.CANNON) {
-                    resolve(window.CANNON);
-                } else {
-                    reject(new Error('CANNON not loaded'));
-                }
+                // Wait for CANNON to be available (some CDNs need a moment)
+                let attempts = 0;
+                const maxAttempts = 50;
+                const checkCANNON = setInterval(() => {
+                    if (window.CANNON) {
+                        clearInterval(checkCANNON);
+                        resolve(window.CANNON);
+                    } else if (attempts++ >= maxAttempts) {
+                        clearInterval(checkCANNON);
+                        // Try alternative CDN
+                        this.loadCannonFromAlternativeCDN(resolve, reject);
+                    }
+                }, 100);
             };
-            script.onerror = () => reject(new Error('Failed to load Cannon.js'));
+            
+            script.onerror = () => {
+                // Try alternative CDN on error
+                this.loadCannonFromAlternativeCDN(resolve, reject);
+            };
+            
             document.head.appendChild(script);
         });
+    }
+
+    loadCannonFromAlternativeCDN(resolve, reject) {
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/cannon@0.6.2/build/cannon.min.js';
+        script.async = true;
+        script.crossOrigin = 'anonymous';
+        
+        script.onload = () => {
+            let attempts = 0;
+            const maxAttempts = 50;
+            const checkCANNON = setInterval(() => {
+                if (window.CANNON) {
+                    clearInterval(checkCANNON);
+                    resolve(window.CANNON);
+                } else if (attempts++ >= maxAttempts) {
+                    clearInterval(checkCANNON);
+                    reject(new Error('CANNON library loaded but window.CANNON is not available. The library may not be compatible with this version.'));
+                }
+            }, 100);
+        };
+        
+        script.onerror = () => {
+            reject(new Error('Failed to load Cannon.js from all CDNs. Please check your internet connection.'));
+        };
+        
+        document.head.appendChild(script);
     }
 
     createWorld() {

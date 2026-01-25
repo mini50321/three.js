@@ -1,5 +1,6 @@
 let stepIndex = document.querySelectorAll('.step').length || 0;
 let initialStateIndex = 0;
+let reactionIndex = 0;
 
 function addStep() {
     const div = document.createElement('div');
@@ -31,30 +32,66 @@ function addStep() {
             <button type="button" onclick="addCondition(${stepIndex})" class="btn btn-secondary" style="font-size: 14px; margin-bottom: 15px;">+ Add Condition</button>
             <div style="margin-bottom: 15px;">
                 <label style="display: block; margin-bottom: 5px; font-weight: 500;">Temperature Rule</label>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px;">
-                    <input type="number" name="steps[${stepIndex}][rules][temperature][target]" placeholder="Target (°C)" step="0.1" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                    <input type="number" name="steps[${stepIndex}][rules][temperature][tolerance]" placeholder="Tolerance" step="0.1" value="5" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                    <input type="number" name="steps[${stepIndex}][rules][temperature][points]" placeholder="Points" min="0" step="1" value="10" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                    <button type="button" onclick="clearRule('temperature', ${stepIndex})" style="padding: 8px; background: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer;">Clear</button>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">Target (°C)</label>
+                        <input type="number" name="steps[${stepIndex}][rules][temperature][target]" placeholder="100" step="0.1" value="0" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">Tolerance</label>
+                        <input type="number" name="steps[${stepIndex}][rules][temperature][tolerance]" placeholder="5" step="0.1" value="0" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">Points</label>
+                        <input type="number" name="steps[${stepIndex}][rules][temperature][points]" placeholder="10" min="0" step="1" value="0" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                    </div>
+                    <div>
+                        <button type="button" onclick="clearRule('temperature', ${stepIndex})" style="padding: 12px 15px; background: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">Clear</button>
+                    </div>
                 </div>
             </div>
             <div style="margin-bottom: 15px;">
                 <label style="display: block; margin-bottom: 5px; font-weight: 500;">Volume Rule</label>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px;">
-                    <input type="number" name="steps[${stepIndex}][rules][volume][target]" placeholder="Target (ml)" step="0.1" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                    <input type="number" name="steps[${stepIndex}][rules][volume][tolerance]" placeholder="Tolerance" step="0.1" value="10" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                    <input type="number" name="steps[${stepIndex}][rules][volume][points]" placeholder="Points" min="0" step="1" value="10" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                    <button type="button" onclick="clearRule('volume', ${stepIndex})" style="padding: 8px; background: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer;">Clear</button>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">Target (ml)</label>
+                        <input type="number" name="steps[${stepIndex}][rules][volume][target]" placeholder="500" step="0.1" value="0" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">Tolerance</label>
+                        <input type="number" name="steps[${stepIndex}][rules][volume][tolerance]" placeholder="10" step="0.1" value="0" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">Points</label>
+                        <input type="number" name="steps[${stepIndex}][rules][volume][points]" placeholder="10" min="0" step="1" value="0" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                    </div>
+                    <div>
+                        <button type="button" onclick="clearRule('volume', ${stepIndex})" style="padding: 12px 15px; background: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">Clear</button>
+                    </div>
                 </div>
             </div>
             <div style="margin-bottom: 15px;">
                 <label style="display: block; margin-bottom: 5px; font-weight: 500;">Rotation Rule</label>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap: 10px;">
-                    <input type="number" name="steps[${stepIndex}][rules][rotation][x]" placeholder="X angle" step="0.01" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                    <input type="number" name="steps[${stepIndex}][rules][rotation][z]" placeholder="Z angle" step="0.01" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                    <input type="number" name="steps[${stepIndex}][rules][rotation][tolerance]" placeholder="Tolerance" step="0.01" value="0.1" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                    <input type="number" name="steps[${stepIndex}][rules][rotation][points]" placeholder="Points" min="0" step="1" value="10" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                    <button type="button" onclick="clearRule('rotation', ${stepIndex})" style="padding: 8px; background: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer;">Clear</button>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">X angle</label>
+                        <input type="number" name="steps[${stepIndex}][rules][rotation][x]" placeholder="0.5" step="0.01" value="0" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">Z angle</label>
+                        <input type="number" name="steps[${stepIndex}][rules][rotation][z]" placeholder="0" step="0.01" value="0" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">Tolerance</label>
+                        <input type="number" name="steps[${stepIndex}][rules][rotation][tolerance]" placeholder="0.1" step="0.01" value="0" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">Points</label>
+                        <input type="number" name="steps[${stepIndex}][rules][rotation][points]" placeholder="10" min="0" step="1" value="0" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                    </div>
+                    <div>
+                        <button type="button" onclick="clearRule('rotation', ${stepIndex})" style="padding: 12px 15px; background: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">Clear</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -298,4 +335,40 @@ function loadInitialStates(initialStates) {
             initialStateIndex++;
         });
     }
+}
+
+function addReaction() {
+    const div = document.createElement('div');
+    div.className = 'reaction-item';
+    div.style.cssText = 'border: 1px solid #e0e6ed; padding: 15px; margin-bottom: 10px; border-radius: 6px; background: #f8f9fa;';
+    div.innerHTML = `
+        <div style="margin-bottom: 15px;">
+            <h4 style="margin: 0 0 10px 0; color: #2c3e50; font-size: 16px;">Reaction ${reactionIndex + 1}</h4>
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #2c3e50;">Reactants (comma-separated)</label>
+            <input type="text" name="reactions[${reactionIndex}][reactants]" placeholder="e.g., acid, base" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            <small style="color: #7f8c8d; font-size: 12px;">Substances that react together (e.g., "acid, base")</small>
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #2c3e50;">Result Type</label>
+            <input type="text" name="reactions[${reactionIndex}][result][type]" placeholder="e.g., salt, water" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            <small style="color: #7f8c8d; font-size: 12px;">Type of substance produced by reaction</small>
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #2c3e50;">Result Color (Hex)</label>
+            <input type="text" name="reactions[${reactionIndex}][result][color]" placeholder="#ffffff" value="#ffffff" pattern="#[0-9a-fA-F]{6}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            <small style="color: #7f8c8d; font-size: 12px;">Hex color code for the resulting liquid (e.g., #ff0000 for red)</small>
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #2c3e50;">Message (optional)</label>
+            <input type="text" name="reactions[${reactionIndex}][message]" placeholder="e.g., Neutralization reaction occurred" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            <small style="color: #7f8c8d; font-size: 12px;">Message to display when reaction occurs</small>
+        </div>
+        <div>
+            <button type="button" onclick="this.closest('.reaction-item').remove()" style="padding: 8px 15px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer;">Remove Reaction</button>
+        </div>
+    `;
+    document.getElementById('reactions').appendChild(div);
+    reactionIndex++;
 }

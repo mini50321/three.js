@@ -52,6 +52,16 @@ if (!$exp) {
                 <div class="form-group">
                     <label>Class</label>
                     <select name="class">
+                        <option value="1" <?= $exp['class']=='1'?'selected':'' ?>>1</option>
+                        <option value="2" <?= $exp['class']=='2'?'selected':'' ?>>2</option>
+                        <option value="3" <?= $exp['class']=='3'?'selected':'' ?>>3</option>
+                        <option value="4" <?= $exp['class']=='4'?'selected':'' ?>>4</option>
+                        <option value="5" <?= $exp['class']=='5'?'selected':'' ?>>5</option>
+                        <option value="6" <?= $exp['class']=='6'?'selected':'' ?>>6</option>
+                        <option value="7" <?= $exp['class']=='7'?'selected':'' ?>>7</option>
+                        <option value="8" <?= $exp['class']=='8'?'selected':'' ?>>8</option>
+                        <option value="9" <?= $exp['class']=='9'?'selected':'' ?>>9</option>
+                        <option value="10" <?= $exp['class']=='10'?'selected':'' ?>>10</option>
                         <option value="11" <?= $exp['class']=='11'?'selected':'' ?>>11</option>
                         <option value="12" <?= $exp['class']=='12'?'selected':'' ?>>12</option>
                     </select>
@@ -116,30 +126,66 @@ if (!$exp) {
                         <button type="button" onclick="addCondition(<?= $i ?>)" class="btn btn-secondary" style="font-size: 14px; margin-bottom: 15px;">+ Add Condition</button>
                         <div style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: 500;">Temperature Rule</label>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px;">
-                                <input type="number" name="steps[<?= $i ?>][rules][temperature][target]" value="<?= isset($s['rules']['temperature']['target']) ? htmlspecialchars($s['rules']['temperature']['target']) : '' ?>" placeholder="Target (°C)" step="0.1" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                                <input type="number" name="steps[<?= $i ?>][rules][temperature][tolerance]" value="<?= isset($s['rules']['temperature']['tolerance']) ? htmlspecialchars($s['rules']['temperature']['tolerance']) : '5' ?>" placeholder="Tolerance" step="0.1" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                                <input type="number" name="steps[<?= $i ?>][rules][temperature][points]" value="<?= isset($s['rules']['temperature']['points']) ? htmlspecialchars($s['rules']['temperature']['points']) : '10' ?>" placeholder="Points" min="0" step="1" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                                <button type="button" onclick="clearRule('temperature', <?= $i ?>)" style="padding: 8px; background: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer;">Clear</button>
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <div>
+                                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">Target (°C)</label>
+                                    <input type="number" name="steps[<?= $i ?>][rules][temperature][target]" value="<?= isset($s['rules']['temperature']['target']) ? htmlspecialchars($s['rules']['temperature']['target']) : '0' ?>" placeholder="100" step="0.1" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">Tolerance</label>
+                                    <input type="number" name="steps[<?= $i ?>][rules][temperature][tolerance]" value="<?= isset($s['rules']['temperature']['tolerance']) ? htmlspecialchars($s['rules']['temperature']['tolerance']) : '0' ?>" placeholder="5" step="0.1" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">Points</label>
+                                    <input type="number" name="steps[<?= $i ?>][rules][temperature][points]" value="<?= isset($s['rules']['temperature']['points']) ? htmlspecialchars($s['rules']['temperature']['points']) : '0' ?>" placeholder="10" min="0" step="1" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                                </div>
+                                <div>
+                                    <button type="button" onclick="clearRule('temperature', <?= $i ?>)" style="padding: 12px 15px; background: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">Clear</button>
+                                </div>
                             </div>
                         </div>
                         <div style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: 500;">Volume Rule</label>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px;">
-                                <input type="number" name="steps[<?= $i ?>][rules][volume][target]" value="<?= isset($s['rules']['volume']['target']) ? htmlspecialchars($s['rules']['volume']['target']) : '' ?>" placeholder="Target (ml)" step="0.1" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                                <input type="number" name="steps[<?= $i ?>][rules][volume][tolerance]" value="<?= isset($s['rules']['volume']['tolerance']) ? htmlspecialchars($s['rules']['volume']['tolerance']) : '10' ?>" placeholder="Tolerance" step="0.1" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                                <input type="number" name="steps[<?= $i ?>][rules][volume][points]" value="<?= isset($s['rules']['volume']['points']) ? htmlspecialchars($s['rules']['volume']['points']) : '10' ?>" placeholder="Points" min="0" step="1" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                                <button type="button" onclick="clearRule('volume', <?= $i ?>)" style="padding: 8px; background: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer;">Clear</button>
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <div>
+                                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">Target (ml)</label>
+                                    <input type="number" name="steps[<?= $i ?>][rules][volume][target]" value="<?= isset($s['rules']['volume']['target']) ? htmlspecialchars($s['rules']['volume']['target']) : '0' ?>" placeholder="500" step="0.1" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">Tolerance</label>
+                                    <input type="number" name="steps[<?= $i ?>][rules][volume][tolerance]" value="<?= isset($s['rules']['volume']['tolerance']) ? htmlspecialchars($s['rules']['volume']['tolerance']) : '0' ?>" placeholder="10" step="0.1" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">Points</label>
+                                    <input type="number" name="steps[<?= $i ?>][rules][volume][points]" value="<?= isset($s['rules']['volume']['points']) ? htmlspecialchars($s['rules']['volume']['points']) : '0' ?>" placeholder="10" min="0" step="1" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                                </div>
+                                <div>
+                                    <button type="button" onclick="clearRule('volume', <?= $i ?>)" style="padding: 12px 15px; background: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">Clear</button>
+                                </div>
                             </div>
                         </div>
                         <div style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: 500;">Rotation Rule</label>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap: 10px;">
-                                <input type="number" name="steps[<?= $i ?>][rules][rotation][x]" value="<?= isset($s['rules']['rotation']['x']) ? htmlspecialchars($s['rules']['rotation']['x']) : '' ?>" placeholder="X angle" step="0.01" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                                <input type="number" name="steps[<?= $i ?>][rules][rotation][z]" value="<?= isset($s['rules']['rotation']['z']) ? htmlspecialchars($s['rules']['rotation']['z']) : '' ?>" placeholder="Z angle" step="0.01" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                                <input type="number" name="steps[<?= $i ?>][rules][rotation][tolerance]" value="<?= isset($s['rules']['rotation']['tolerance']) ? htmlspecialchars($s['rules']['rotation']['tolerance']) : '0.1' ?>" placeholder="Tolerance" step="0.01" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                                <input type="number" name="steps[<?= $i ?>][rules][rotation][points]" value="<?= isset($s['rules']['rotation']['points']) ? htmlspecialchars($s['rules']['rotation']['points']) : '10' ?>" placeholder="Points" min="0" step="1" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                                <button type="button" onclick="clearRule('rotation', <?= $i ?>)" style="padding: 8px; background: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer;">Clear</button>
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <div>
+                                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">X angle</label>
+                                    <input type="number" name="steps[<?= $i ?>][rules][rotation][x]" value="<?= isset($s['rules']['rotation']['x']) ? htmlspecialchars($s['rules']['rotation']['x']) : '0' ?>" placeholder="0.5" step="0.01" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">Z angle</label>
+                                    <input type="number" name="steps[<?= $i ?>][rules][rotation][z]" value="<?= isset($s['rules']['rotation']['z']) ? htmlspecialchars($s['rules']['rotation']['z']) : '0' ?>" placeholder="0" step="0.01" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">Tolerance</label>
+                                    <input type="number" name="steps[<?= $i ?>][rules][rotation][tolerance]" value="<?= isset($s['rules']['rotation']['tolerance']) ? htmlspecialchars($s['rules']['rotation']['tolerance']) : '0' ?>" placeholder="0.1" step="0.01" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">Points</label>
+                                    <input type="number" name="steps[<?= $i ?>][rules][rotation][points]" value="<?= isset($s['rules']['rotation']['points']) ? htmlspecialchars($s['rules']['rotation']['points']) : '0' ?>" placeholder="10" min="0" step="1" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px; font-weight: 500;">
+                                </div>
+                                <div>
+                                    <button type="button" onclick="clearRule('rotation', <?= $i ?>)" style="padding: 12px 15px; background: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">Clear</button>
+                                </div>
                             </div>
                         </div>
                     </div>

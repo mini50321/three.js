@@ -200,6 +200,11 @@ export class ExperimentEngine {
         this.renderer.shadowMap.enabled = quality.shadows;
         this.renderer.shadowMap.type = quality.shadowMapType;
         this.renderer.sortObjects = false;
+        
+        // Ensure canvas can receive all events including wheel for zoom
+        this.renderer.domElement.style.touchAction = 'none';
+        this.renderer.domElement.style.userSelect = 'none';
+        
         this.container.appendChild(this.renderer.domElement);
 
         window.addEventListener('resize', () => this.onWindowResize());
@@ -208,15 +213,30 @@ export class ExperimentEngine {
     setupControls() {
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableDamping = true;
-        this.controls.dampingFactor = 0.05;
+        this.controls.dampingFactor = 0.1;
         this.controls.minDistance = 2;
         this.controls.maxDistance = 20;
         this.controls.enablePan = true;
-        this.controls.mouseButtons = {
-            LEFT: THREE.MOUSE.ROTATE,
-            MIDDLE: THREE.MOUSE.DOLLY,
-            RIGHT: THREE.MOUSE.PAN
-        };
+        this.controls.enableZoom = false;
+        this.controls.enableRotate = true;
+        this.controls.zoomSpeed = 0.05;
+        this.controls.enabled = true;
+        
+        this.controls.target.set(0, 0, 0);
+        this.controls.update();
+        
+        this.targetZoomDistance = null; 
+        
+    
+        this.renderer.domElement.focus();
+        
+        
+        console.log('OrbitControls initialized:', {
+            enabled: this.controls.enabled,
+            enableZoom: this.controls.enableZoom,
+            enableRotate: this.controls.enableRotate,
+            zoomSpeed: this.controls.zoomSpeed
+        });
     }
 
     setupLighting() {
@@ -469,12 +489,37 @@ export class ExperimentEngine {
         this.interactions.set('stir', new StirController(this));
         
         this.renderer.domElement.style.cursor = 'pointer';
-        this.renderer.domElement.addEventListener('mousedown', (e) => this.onMouseDown(e), { passive: false });
-        this.renderer.domElement.addEventListener('mousemove', (e) => this.onMouseMove(e), { passive: false });
+        this.renderer.domElement.setAttribute('tabindex', '0'); 
+        
+        // Click on canvas to focus it for wheel events
+        this.renderer.domElement.addEventListener('click', () => {
+            this.renderer.domElement.focus();
+        });
+        
+        this.renderer.domElement.addEventListener('mousedown', (e) => {
+            if (e.button === 0) {
+                this.onMouseDown(e);
+            }
+        }, { passive: false });
+        this.renderer.domElement.addEventListener('mousemove', (e) => this.onMouseMove(e), { passive: true });
         this.renderer.domElement.addEventListener('mouseup', (e) => this.onMouseUp(e), { passive: false });
         this.renderer.domElement.addEventListener('touchstart', (e) => this.onTouchStart(e), { passive: false });
         this.renderer.domElement.addEventListener('touchmove', (e) => this.onTouchMove(e), { passive: false });
         this.renderer.domElement.addEventListener('touchend', (e) => this.onTouchEnd(e), { passive: false });
+        
+        // Debug: Test if wheel events are reaching the canvas
+        this.renderer.domElement.addEventListener('wheel', (e) => {
+            if (this.controls && this.controls.enabled) {
+                e.preventDefault();
+                const currentDistance = this.camera.position.distanceTo(this.controls.target);
+                const zoomDelta = e.deltaY * 0.02;
+                const newDistance = Math.max(
+                    this.controls.minDistance,
+                    Math.min(this.controls.maxDistance, currentDistance + zoomDelta)
+                );
+                this.targetZoomDistance = newDistance;
+            }
+        }, { passive: false });
         
         window.addEventListener('keydown', (e) => this.onKeyDown(e));
         window.addEventListener('keyup', (e) => this.onKeyUp(e));
@@ -502,12 +547,6 @@ export class ExperimentEngine {
         
         this.performanceManager.updateFPS(deltaTime);
         
-        const targetFrameTime = this.performanceManager.frameTime;
-        if (deltaTime < targetFrameTime) {
-            requestAnimationFrame(() => this.animate());
-            return;
-        }
-        
         requestAnimationFrame(() => this.animate());
         
         const width = this.container.clientWidth;
@@ -519,12 +558,29 @@ export class ExperimentEngine {
             this.renderer.setSize(width, height);
         }
         
-        this.controls.update();
+      
+        if (this.controls) {
+            if (this.targetZoomDistance !== null) {
+                const distance = this.camera.position.distanceTo(this.controls.target);
+                const diff = this.targetZoomDistance - distance;
+                if (Math.abs(diff) > 0.01) {
+                    const lerpFactor = 0.2;
+                    const newDistance = distance + diff * lerpFactor;
+                    const direction = this.camera.position.clone().sub(this.controls.target).normalize();
+                    this.camera.position.copy(this.controls.target.clone().add(direction.multiplyScalar(newDistance)));
+                } else {
+                    this.targetZoomDistance = null;
+                }
+            }
+            this.controls.update();
+        }
+        
         this.updateThrottleCounter++;
         if (!this.performanceManager.shouldThrottleUpdate(this.updateThrottleCounter)) {
             this.updatePhysics();
         }
         
+       
         this.renderer.render(this.scene, this.camera);
     }
 
@@ -1310,7 +1366,11 @@ export class ExperimentEngine {
     }
 
     onMouseDown(event) {
-        if (event.button !== 0) return;
+        
+        if (event.button !== 0) {
+            
+            return;
+        }
         
         const rect = this.renderer.domElement.getBoundingClientRect();
         this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -1330,16 +1390,13 @@ export class ExperimentEngine {
         if (intersects.length > 0) {
             const clickedObject = this.findObjectByMesh(intersects[0].object);
             if (clickedObject) {
-                console.log('Clicked object:', clickedObject.name, 'draggable:', clickedObject.interactions.draggable, 'tiltable:', clickedObject.interactions.tiltable);
+               
                 event.preventDefault();
                 event.stopPropagation();
                 this.handleInteractionStart(clickedObject, event);
-            } else {
-                console.log('Object found but not in registry');
             }
-        } else {
-            console.log('No intersection found, mouse:', this.mouse);
         }
+       
     }
 
     onMouseMove(event) {
@@ -1356,8 +1413,11 @@ export class ExperimentEngine {
         if (this.activeController) {
             this.activeController.end();
             this.activeController = null;
-            this.controls.enabled = true;
         }
+        // Always re-enable controls when mouse is released
+        this.controls.enabled = true;
+        // Ensure canvas has focus for wheel events
+        this.renderer.domElement.focus();
     }
 
     onTouchStart(event) {
