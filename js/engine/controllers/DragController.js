@@ -22,6 +22,16 @@ export class DragController {
         this.updatePlane();
         
         if (this.engine.physicsEnabled && obj.physicsBody && this.engine.physicsManager) {
+            if (!obj.physicsEnabled) {
+                obj.physicsEnabled = true;
+                obj.physicsBody.type = this.engine.physicsManager.CANNON.Body.DYNAMIC;
+                const box = new THREE.Box3().setFromObject(obj.mesh);
+                const center = box.getCenter(new THREE.Vector3());
+                this.engine.physicsManager.setBodyPosition(obj.physicsBody, center);
+                if (obj.centerOffset) {
+                    obj.centerOffset = new THREE.Vector3().subVectors(center, obj.mesh.position);
+                }
+            }
             this.engine.physicsManager.enableBody(obj.physicsBody, false);
         }
         

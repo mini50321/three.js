@@ -362,7 +362,6 @@ export class ExperimentEngine {
                 });
                 
                 const tableTopY = this.tableBounds ? this.tableBounds.y : 0;
-                const modelY = tableTopY - minY;
                 
                 let initialPosition;
                 if (this.tableBounds) {
@@ -388,23 +387,29 @@ export class ExperimentEngine {
                     posX = Math.max(this.tableBounds.minX + 0.2, Math.min(this.tableBounds.maxX - 0.2, posX));
                     posZ = Math.max(this.tableBounds.minZ + 0.2, Math.min(this.tableBounds.maxZ - 0.2, posZ));
                     
-                    initialPosition = new THREE.Vector3(posX, modelY, posZ);
+                    initialPosition = new THREE.Vector3(posX, 0, posZ);
                 } else {
-                    initialPosition = new THREE.Vector3(0, modelY, 0);
+                    initialPosition = new THREE.Vector3(0, 0, 0);
                 }
                 
                 model.position.copy(initialPosition);
                 model.updateMatrixWorld(true);
                 
+                let attempts = 0;
                 let boxPositioned = new THREE.Box3().setFromObject(model);
                 let minYPositioned = boxPositioned.min.y;
                 
-                if (Math.abs(minYPositioned - tableTopY) > 0.01) {
+                while (Math.abs(minYPositioned - tableTopY) > 0.001 && attempts < 20) {
                     const correction = tableTopY - minYPositioned;
                     model.position.y += correction;
                     model.updateMatrixWorld(true);
                     boxPositioned = new THREE.Box3().setFromObject(model);
                     minYPositioned = boxPositioned.min.y;
+                    attempts++;
+                }
+                
+                if (Math.abs(minYPositioned - tableTopY) > 0.01) {
+                    console.warn(`Failed to position ${modelName} on table. minY: ${minYPositioned}, tableTopY: ${tableTopY}`);
                 }
                 
                 const centerFinal = boxPositioned.getCenter(new THREE.Vector3());
@@ -469,17 +474,38 @@ export class ExperimentEngine {
                     }
                     
                     if (body) {
+                        model.updateMatrixWorld(true);
                         const boxWorld = new THREE.Box3().setFromObject(model);
                         const centerWorld = boxWorld.getCenter(new THREE.Vector3());
-                        body.position.set(centerWorld.x, centerWorld.y, centerWorld.z);
+                        const minYWorld = boxWorld.min.y;
+                        
+                        if (Math.abs(minYWorld - tableTopY) > 0.01) {
+                            let correctionAttempts = 0;
+                            let currentMinY = minYWorld;
+                            while (Math.abs(currentMinY - tableTopY) > 0.001 && correctionAttempts < 20) {
+                                const correction = tableTopY - currentMinY;
+                                model.position.y += correction;
+                                model.updateMatrixWorld(true);
+                                const boxCorrected = new THREE.Box3().setFromObject(model);
+                                currentMinY = boxCorrected.min.y;
+                                correctionAttempts++;
+                            }
+                            const boxFinal = new THREE.Box3().setFromObject(model);
+                            const centerFinal = boxFinal.getCenter(new THREE.Vector3());
+                            body.position.set(centerFinal.x, centerFinal.y, centerFinal.z);
+                            objectData.centerOffset = new THREE.Vector3().subVectors(centerFinal, model.position);
+                        } else {
+                            body.position.set(centerWorld.x, centerWorld.y, centerWorld.z);
+                        }
                         
                         const meshQuaternion = new THREE.Quaternion().setFromEuler(model.rotation);
                         body.quaternion.set(meshQuaternion.x, meshQuaternion.y, meshQuaternion.z, meshQuaternion.w);
                         body.velocity.set(0, 0, 0);
                         body.angularVelocity.set(0, 0, 0);
+                        body.type = this.physicsManager.CANNON.Body.KINEMATIC;
                         body.wakeUp();
-                        body.type = this.physicsManager.CANNON.Body.DYNAMIC;
                         objectData.physicsBody = body;
+                        objectData.physicsEnabled = false;
                         this.physicsManager.addBody(modelName, body);
                     }
                 }
@@ -632,8 +658,12 @@ export class ExperimentEngine {
             this.physicsManager.update(deltaTime);
             
             for (const [name, obj] of this.objects) {
-                if (obj.physicsBody && !this.isObjectBeingDragged(obj) && !obj.justReleased) {
-                    this.physicsManager.syncMeshToBody(obj.mesh, obj.physicsBody, obj.centerOffset);
+                if (obj.physicsBody && !this.isObjectBeingDragged(obj) && !obj.justReleased && !obj.initializing) {
+                    if (obj.physicsBody.type === this.physicsManager.CANNON.Body.DYNAMIC && obj.physicsEnabled !== false) {
+                        this.physicsManager.syncMeshToBody(obj.mesh, obj.physicsBody, obj.centerOffset);
+                    } else {
+                        this.physicsManager.syncBodyToMesh(obj.physicsBody, obj.mesh);
+                    }
                 } else if (obj.physicsBody && this.isObjectBeingDragged(obj)) {
                     this.physicsManager.syncBodyToMesh(obj.physicsBody, obj.mesh);
                 } else {
