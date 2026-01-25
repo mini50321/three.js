@@ -362,22 +362,53 @@ export class ExperimentEngine {
                 });
                 
                 const tableTopY = this.tableBounds ? this.tableBounds.y : 0;
-                const modelBottomOffset = Math.abs(minY);
-                const modelY = tableTopY + modelBottomOffset;
+                const modelY = tableTopY - minY;
                 
                 let initialPosition;
-                const tableCenterX = this.tableBounds ? (this.tableBounds.minX + this.tableBounds.maxX) / 2 : 0;
-                const tableCenterZ = this.tableBounds ? (this.tableBounds.minZ + this.tableBounds.maxZ) / 2 : 0;
-                
-                if (lowerName.includes('beaker')) {
-                    initialPosition = new THREE.Vector3(tableCenterX - 1, modelY, tableCenterZ);
-                } else if (lowerName.includes('conical')) {
-                    initialPosition = new THREE.Vector3(tableCenterX + 1, modelY, tableCenterZ);
+                if (this.tableBounds) {
+                    const tableCenterX = (this.tableBounds.minX + this.tableBounds.maxX) / 2;
+                    const tableCenterZ = (this.tableBounds.minZ + this.tableBounds.maxZ) / 2;
+                    const tableWidth = this.tableBounds.maxX - this.tableBounds.minX;
+                    const tableDepth = this.tableBounds.maxZ - this.tableBounds.minZ;
+                    const offsetX = Math.min(1, tableWidth / 4);
+                    const offsetZ = Math.min(1, tableDepth / 4);
+                    
+                    let posX, posZ;
+                    if (lowerName.includes('beaker')) {
+                        posX = tableCenterX - offsetX;
+                        posZ = tableCenterZ;
+                    } else if (lowerName.includes('conical')) {
+                        posX = tableCenterX + offsetX;
+                        posZ = tableCenterZ;
+                    } else {
+                        posX = tableCenterX;
+                        posZ = tableCenterZ;
+                    }
+                    
+                    posX = Math.max(this.tableBounds.minX + 0.2, Math.min(this.tableBounds.maxX - 0.2, posX));
+                    posZ = Math.max(this.tableBounds.minZ + 0.2, Math.min(this.tableBounds.maxZ - 0.2, posZ));
+                    
+                    initialPosition = new THREE.Vector3(posX, modelY, posZ);
                 } else {
-                    initialPosition = new THREE.Vector3(tableCenterX, modelY, tableCenterZ);
+                    initialPosition = new THREE.Vector3(0, modelY, 0);
                 }
                 
                 model.position.copy(initialPosition);
+                model.updateMatrixWorld(true);
+                
+                let boxPositioned = new THREE.Box3().setFromObject(model);
+                let minYPositioned = boxPositioned.min.y;
+                
+                if (Math.abs(minYPositioned - tableTopY) > 0.01) {
+                    const correction = tableTopY - minYPositioned;
+                    model.position.y += correction;
+                    model.updateMatrixWorld(true);
+                    boxPositioned = new THREE.Box3().setFromObject(model);
+                    minYPositioned = boxPositioned.min.y;
+                }
+                
+                const centerFinal = boxPositioned.getCenter(new THREE.Vector3());
+                const centerOffset = new THREE.Vector3().subVectors(centerFinal, model.position);
                 
                 const initialStateForObject = this.getInitialStateForObject(modelName);
                 
@@ -400,6 +431,7 @@ export class ExperimentEngine {
                     boundingBox: box,
                     size: size,
                     center: center,
+                    centerOffset: centerOffset,
                     properties: {
                         volume: initialVolume,
                         mass: modelProps.mass || 1,
@@ -437,6 +469,16 @@ export class ExperimentEngine {
                     }
                     
                     if (body) {
+                        const boxWorld = new THREE.Box3().setFromObject(model);
+                        const centerWorld = boxWorld.getCenter(new THREE.Vector3());
+                        body.position.set(centerWorld.x, centerWorld.y, centerWorld.z);
+                        
+                        const meshQuaternion = new THREE.Quaternion().setFromEuler(model.rotation);
+                        body.quaternion.set(meshQuaternion.x, meshQuaternion.y, meshQuaternion.z, meshQuaternion.w);
+                        body.velocity.set(0, 0, 0);
+                        body.angularVelocity.set(0, 0, 0);
+                        body.wakeUp();
+                        body.type = this.physicsManager.CANNON.Body.DYNAMIC;
                         objectData.physicsBody = body;
                         this.physicsManager.addBody(modelName, body);
                     }
@@ -501,7 +543,7 @@ export class ExperimentEngine {
                 this.onMouseDown(e);
             }
         }, { passive: false });
-        this.renderer.domElement.addEventListener('mousemove', (e) => this.onMouseMove(e), { passive: true });
+        this.renderer.domElement.addEventListener('mousemove', (e) => this.onMouseMove(e), { passive: false });
         this.renderer.domElement.addEventListener('mouseup', (e) => this.onMouseUp(e), { passive: false });
         this.renderer.domElement.addEventListener('touchstart', (e) => this.onTouchStart(e), { passive: false });
         this.renderer.domElement.addEventListener('touchmove', (e) => this.onTouchMove(e), { passive: false });
@@ -590,8 +632,8 @@ export class ExperimentEngine {
             this.physicsManager.update(deltaTime);
             
             for (const [name, obj] of this.objects) {
-                if (obj.physicsBody && !this.isObjectBeingDragged(obj)) {
-                    this.physicsManager.syncMeshToBody(obj.mesh, obj.physicsBody);
+                if (obj.physicsBody && !this.isObjectBeingDragged(obj) && !obj.justReleased) {
+                    this.physicsManager.syncMeshToBody(obj.mesh, obj.physicsBody, obj.centerOffset);
                 } else if (obj.physicsBody && this.isObjectBeingDragged(obj)) {
                     this.physicsManager.syncBodyToMesh(obj.physicsBody, obj.mesh);
                 } else {

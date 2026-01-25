@@ -65,12 +65,23 @@ export class DragController {
             if (this.engine.tableBounds) {
                 const box = new THREE.Box3().setFromObject(this.activeObject.mesh);
                 const minY = box.min.y;
-                const beakerBottomOffset = this.activeObject.mesh.position.y - minY;
-                newPosition.y = this.engine.tableBounds.y + beakerBottomOffset;
+                const bottomOffset = this.activeObject.mesh.position.y - minY;
+                const targetY = this.engine.tableBounds.y + bottomOffset;
+                
+                if (newPosition.y < targetY) {
+                    newPosition.y = targetY;
+                } else {
+                    newPosition.y = Math.max(targetY, newPosition.y);
+                }
             }
             
             if (this.engine.physicsEnabled && this.activeObject.physicsBody && this.engine.physicsManager) {
-                this.engine.physicsManager.setBodyPosition(this.activeObject.physicsBody, newPosition);
+                if (this.activeObject.centerOffset) {
+                    const bodyCenter = new THREE.Vector3().addVectors(newPosition, this.activeObject.centerOffset);
+                    this.engine.physicsManager.setBodyPosition(this.activeObject.physicsBody, bodyCenter);
+                } else {
+                    this.engine.physicsManager.setBodyPosition(this.activeObject.physicsBody, newPosition);
+                }
                 this.activeObject.mesh.position.copy(newPosition);
             } else {
                 this.activeObject.mesh.position.copy(newPosition);
@@ -80,8 +91,47 @@ export class DragController {
 
     end() {
         if (this.activeObject && this.engine.physicsEnabled && this.activeObject.physicsBody && this.engine.physicsManager) {
+            this.activeObject.mesh.updateMatrixWorld(true);
+            
+            if (this.engine.tableBounds) {
+                const box = new THREE.Box3().setFromObject(this.activeObject.mesh);
+                const minY = box.min.y;
+                const targetMinY = this.engine.tableBounds.y;
+                
+                if (Math.abs(minY - targetMinY) > 0.01) {
+                    const correction = targetMinY - minY;
+                    this.activeObject.mesh.position.y += correction;
+                    this.activeObject.mesh.updateMatrixWorld(true);
+                }
+            }
+            
+            const boxFinal = new THREE.Box3().setFromObject(this.activeObject.mesh);
+            const centerWorld = boxFinal.getCenter(new THREE.Vector3());
+            const centerOffsetNew = new THREE.Vector3().subVectors(centerWorld, this.activeObject.mesh.position);
+            this.activeObject.centerOffset = centerOffsetNew;
+            
+            this.engine.physicsManager.setBodyPosition(this.activeObject.physicsBody, centerWorld);
+            
+            const meshQuaternion = new THREE.Quaternion().setFromEuler(this.activeObject.mesh.rotation);
+            this.activeObject.physicsBody.quaternion.set(
+                meshQuaternion.x,
+                meshQuaternion.y,
+                meshQuaternion.z,
+                meshQuaternion.w
+            );
+            
+            this.activeObject.physicsBody.velocity.set(0, 0, 0);
+            this.activeObject.physicsBody.angularVelocity.set(0, 0, 0);
+            this.activeObject.justReleased = true;
+            
             this.engine.physicsManager.enableBody(this.activeObject.physicsBody, true);
-            this.engine.physicsManager.syncBodyToMesh(this.activeObject.physicsBody, this.activeObject.mesh);
+            this.activeObject.physicsBody.wakeUp();
+            
+            requestAnimationFrame(() => {
+                if (this.activeObject) {
+                    this.activeObject.justReleased = false;
+                }
+            });
         }
         this.activeObject = null;
     }

@@ -95,6 +95,7 @@ export class PhysicsManager {
         this.world.solver.iterations = this.solverIterations;
         this.world.defaultContactMaterial.friction = 0.4;
         this.world.defaultContactMaterial.restitution = 0.3;
+        this.world.allowSleep = true;
 
         this.createMaterials();
     }
@@ -155,6 +156,7 @@ export class PhysicsManager {
         const size = box.getSize(new THREE.Vector3());
         const radius = Math.max(size.x, size.z) / 2;
         const height = size.y;
+        const center = box.getCenter(new THREE.Vector3());
 
         const shape = new this.CANNON.Cylinder(
             radius,
@@ -163,16 +165,15 @@ export class PhysicsManager {
             8
         );
         const body = new this.CANNON.Body({ mass: mass });
-        body.addShape(shape);
         
         const quaternion = new this.CANNON.Quaternion();
         quaternion.setFromAxisAngle(new this.CANNON.Vec3(1, 0, 0), -Math.PI / 2);
-        body.quaternion.mult(quaternion, body.quaternion);
+        body.addShape(shape, new this.CANNON.Vec3(0, 0, 0), quaternion);
         
         body.position.set(
-            mesh.position.x,
-            mesh.position.y,
-            mesh.position.z
+            center.x,
+            center.y,
+            center.z
         );
         
         const meshQuaternion = new THREE.Quaternion().setFromEuler(mesh.rotation);
@@ -219,18 +220,17 @@ export class PhysicsManager {
             (tableBounds.maxZ - tableBounds.minZ) / 2
         ));
 
-        const body = new this.CANNON.Body({ mass: 0 });
+        const body = new this.CANNON.Body({ 
+            mass: 0, 
+            type: this.CANNON.Body.STATIC,
+            material: this.materials.get('table')
+        });
         body.addShape(shape);
         body.position.set(
             (tableBounds.minX + tableBounds.maxX) / 2,
-            tableBounds.y - 0.1,
+            tableBounds.y - 0.05,
             (tableBounds.minZ + tableBounds.maxZ) / 2
         );
-
-        const mat = this.materials.get('table');
-        if (mat) {
-            body.material = mat;
-        }
 
         this.world.addBody(body);
         return body;
@@ -258,10 +258,14 @@ export class PhysicsManager {
         this.world.step(this.timeStep, deltaTime, this.maxSubSteps);
     }
 
-    syncMeshToBody(mesh, body) {
+    syncMeshToBody(mesh, body, centerOffset) {
         if (!mesh || !body) return;
 
-        mesh.position.copy(body.position);
+        if (centerOffset) {
+            mesh.position.copy(new THREE.Vector3().subVectors(body.position, centerOffset));
+        } else {
+            mesh.position.copy(body.position);
+        }
         mesh.quaternion.copy(body.quaternion);
     }
 
