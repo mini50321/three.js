@@ -363,29 +363,41 @@ export class ExperimentEngine {
                 
                 const tableTopY = this.tableBounds ? this.tableBounds.y : 0;
                 
+                const objectSize = box.getSize(new THREE.Vector3());
+                const objectRadius = Math.max(objectSize.x, objectSize.z) / 2;
+                
                 let initialPosition;
                 if (this.tableBounds) {
                     const tableCenterX = (this.tableBounds.minX + this.tableBounds.maxX) / 2;
                     const tableCenterZ = (this.tableBounds.minZ + this.tableBounds.maxZ) / 2;
                     const tableWidth = this.tableBounds.maxX - this.tableBounds.minX;
                     const tableDepth = this.tableBounds.maxZ - this.tableBounds.minZ;
-                    const offsetX = Math.min(1, tableWidth / 4);
-                    const offsetZ = Math.min(1, tableDepth / 4);
+                    
+                    let minSpacing = objectRadius * 4;
+                    if (this.objects.size > 0) {
+                        for (const [existingName, existingObj] of this.objects) {
+                            existingObj.mesh.updateMatrixWorld(true);
+                            const existingBox = new THREE.Box3().setFromObject(existingObj.mesh);
+                            const existingSize = existingBox.getSize(new THREE.Vector3());
+                            const existingRadius = Math.max(existingSize.x, existingSize.z) / 2;
+                            minSpacing = Math.max(minSpacing, objectRadius + existingRadius + 0.3);
+                        }
+                    }
                     
                     let posX, posZ;
                     if (lowerName.includes('beaker')) {
-                        posX = tableCenterX - offsetX;
+                        posX = tableCenterX - minSpacing;
                         posZ = tableCenterZ;
                     } else if (lowerName.includes('conical')) {
-                        posX = tableCenterX + offsetX;
+                        posX = tableCenterX + minSpacing;
                         posZ = tableCenterZ;
                     } else {
                         posX = tableCenterX;
                         posZ = tableCenterZ;
                     }
                     
-                    posX = Math.max(this.tableBounds.minX + 0.2, Math.min(this.tableBounds.maxX - 0.2, posX));
-                    posZ = Math.max(this.tableBounds.minZ + 0.2, Math.min(this.tableBounds.maxZ - 0.2, posZ));
+                    posX = Math.max(this.tableBounds.minX + objectRadius + 0.3, Math.min(this.tableBounds.maxX - objectRadius - 0.3, posX));
+                    posZ = Math.max(this.tableBounds.minZ + objectRadius + 0.3, Math.min(this.tableBounds.maxZ - objectRadius - 0.3, posZ));
                     
                     initialPosition = new THREE.Vector3(posX, 0, posZ);
                 } else {
@@ -502,11 +514,25 @@ export class ExperimentEngine {
                         body.quaternion.set(meshQuaternion.x, meshQuaternion.y, meshQuaternion.z, meshQuaternion.w);
                         body.velocity.set(0, 0, 0);
                         body.angularVelocity.set(0, 0, 0);
-                        body.type = this.physicsManager.CANNON.Body.KINEMATIC;
+                        body.type = this.physicsManager.CANNON.Body.DYNAMIC;
+                        body.material = this.physicsManager.materials.get('object');
+                        body.collisionFilterGroup = 1;
+                        body.collisionFilterMask = -1;
                         body.wakeUp();
+                        body.sleepSpeedLimit = 0.1;
+                        body.sleepTimeLimit = 1;
                         objectData.physicsBody = body;
-                        objectData.physicsEnabled = false;
                         this.physicsManager.addBody(modelName, body);
+                        
+                        setTimeout(() => {
+                            if (body && objectData.physicsBody === body) {
+                                model.updateMatrixWorld(true);
+                                const boxCheck = new THREE.Box3().setFromObject(model);
+                                const centerCheck = boxCheck.getCenter(new THREE.Vector3());
+                                body.position.set(centerCheck.x, centerCheck.y, centerCheck.z);
+                                body.wakeUp();
+                            }
+                        }, 100);
                     }
                 }
                 
@@ -655,17 +681,25 @@ export class ExperimentEngine {
     updatePhysics() {
         if (this.physicsEnabled && this.physicsManager && this.physicsManager.world) {
             const deltaTime = (performance.now() - this.lastUpdateTime) / 1000;
+            this.lastUpdateTime = performance.now();
             this.physicsManager.update(deltaTime);
             
-            for (const [name, obj] of this.objects) {
-                if (obj.physicsBody && !this.isObjectBeingDragged(obj) && !obj.justReleased && !obj.initializing) {
-                    if (obj.physicsBody.type === this.physicsManager.CANNON.Body.DYNAMIC && obj.physicsEnabled !== false) {
-                        this.physicsManager.syncMeshToBody(obj.mesh, obj.physicsBody, obj.centerOffset);
-                    } else {
+            const objectList = Array.from(this.objects.entries());
+            
+            for (const [name, obj] of objectList) {
+                if (obj.physicsBody) {
+                    if (!this.isObjectBeingDragged(obj) && !obj.justReleased && !obj.initializing) {
+                        if (obj.physicsBody.type === this.physicsManager.CANNON.Body.DYNAMIC) {
+                            obj.physicsBody.wakeUp();
+                            this.physicsManager.syncMeshToBody(obj.mesh, obj.physicsBody, obj.centerOffset);
+                        } else {
+                            this.physicsManager.syncBodyToMesh(obj.physicsBody, obj.mesh);
+                        }
+                    } else if (this.isObjectBeingDragged(obj)) {
                         this.physicsManager.syncBodyToMesh(obj.physicsBody, obj.mesh);
+                    } else {
+                        this.constrainToTable(obj);
                     }
-                } else if (obj.physicsBody && this.isObjectBeingDragged(obj)) {
-                    this.physicsManager.syncBodyToMesh(obj.physicsBody, obj.mesh);
                 } else {
                     this.constrainToTable(obj);
                 }
@@ -676,6 +710,101 @@ export class ExperimentEngine {
                 
                 this.updateEffects(obj);
                 this.updateMeasurements(obj);
+            }
+            
+            for (let i = 0; i < objectList.length; i++) {
+                const [name, obj] = objectList[i];
+                if (!obj.physicsBody || this.isObjectBeingDragged(obj) || obj.justReleased || obj.initializing) continue;
+                
+                obj.mesh.updateMatrixWorld(true);
+                const box = new THREE.Box3().setFromObject(obj.mesh);
+                const size = box.getSize(new THREE.Vector3());
+                const radius = Math.max(size.x, size.z) / 2;
+                const center = box.getCenter(new THREE.Vector3());
+                const minY = box.min.y;
+                
+                if (this.tableBounds && minY < this.tableBounds.y) {
+                    const correction = this.tableBounds.y - minY;
+                    obj.mesh.position.y += correction;
+                    obj.mesh.updateMatrixWorld(true);
+                    const correctedBox = new THREE.Box3().setFromObject(obj.mesh);
+                    const correctedCenter = correctedBox.getCenter(new THREE.Vector3());
+                    if (obj.centerOffset) {
+                        const bodyPos = new THREE.Vector3().addVectors(obj.mesh.position, obj.centerOffset);
+                        this.physicsManager.setBodyPosition(obj.physicsBody, bodyPos);
+                    } else {
+                        this.physicsManager.setBodyPosition(obj.physicsBody, correctedCenter);
+                    }
+                    obj.physicsBody.velocity.set(0, 0, 0);
+                    obj.physicsBody.angularVelocity.set(0, 0, 0);
+                    obj.physicsBody.wakeUp();
+                    continue;
+                }
+                
+                for (let j = i + 1; j < objectList.length; j++) {
+                    const [otherName, otherObj] = objectList[j];
+                    if (!otherObj.physicsBody || this.isObjectBeingDragged(otherObj) || otherObj.justReleased || otherObj.initializing) continue;
+                    
+                    otherObj.mesh.updateMatrixWorld(true);
+                    const otherBox = new THREE.Box3().setFromObject(otherObj.mesh);
+                    const otherSize = otherBox.getSize(new THREE.Vector3());
+                    const otherRadius = Math.max(otherSize.x, otherSize.z) / 2;
+                    const otherCenter = otherBox.getCenter(new THREE.Vector3());
+                    
+                    const boxesIntersect = box.intersectsBox(otherBox);
+                    const distance = center.distanceTo(otherCenter);
+                    const minDistance = radius + otherRadius;
+                    
+                    if (boxesIntersect || (distance < minDistance && distance > 0.001)) {
+                        let direction = new THREE.Vector3().subVectors(center, otherCenter);
+                        if (direction.length() < 0.001) {
+                            direction.set(1, 0, 0);
+                        } else {
+                            direction.normalize();
+                        }
+                        
+                        const overlap = minDistance - distance;
+                        const correction1 = overlap * 0.6;
+                        const correction2 = overlap * 0.6;
+                        
+                        const offset1 = direction.clone().multiplyScalar(correction1);
+                        const offset2 = direction.clone().multiplyScalar(-correction2);
+                        
+                        obj.mesh.position.add(offset1);
+                        otherObj.mesh.position.add(offset2);
+                        
+                        obj.mesh.updateMatrixWorld(true);
+                        otherObj.mesh.updateMatrixWorld(true);
+                        
+                        if (obj.physicsBody) {
+                            const correctedBox1 = new THREE.Box3().setFromObject(obj.mesh);
+                            const correctedCenter1 = correctedBox1.getCenter(new THREE.Vector3());
+                            if (obj.centerOffset) {
+                                const bodyPos = new THREE.Vector3().addVectors(obj.mesh.position, obj.centerOffset);
+                                this.physicsManager.setBodyPosition(obj.physicsBody, bodyPos);
+                            } else {
+                                this.physicsManager.setBodyPosition(obj.physicsBody, correctedCenter1);
+                            }
+                            obj.physicsBody.velocity.set(0, 0, 0);
+                            obj.physicsBody.angularVelocity.set(0, 0, 0);
+                            obj.physicsBody.wakeUp();
+                        }
+                        
+                        if (otherObj.physicsBody) {
+                            const correctedBox2 = new THREE.Box3().setFromObject(otherObj.mesh);
+                            const correctedCenter2 = correctedBox2.getCenter(new THREE.Vector3());
+                            if (otherObj.centerOffset) {
+                                const bodyPos = new THREE.Vector3().addVectors(otherObj.mesh.position, otherObj.centerOffset);
+                                this.physicsManager.setBodyPosition(otherObj.physicsBody, bodyPos);
+                            } else {
+                                this.physicsManager.setBodyPosition(otherObj.physicsBody, correctedCenter2);
+                            }
+                            otherObj.physicsBody.velocity.set(0, 0, 0);
+                            otherObj.physicsBody.angularVelocity.set(0, 0, 0);
+                            otherObj.physicsBody.wakeUp();
+                        }
+                    }
+                }
             }
         } else {
             for (const [name, obj] of this.objects) {
@@ -748,28 +877,35 @@ export class ExperimentEngine {
         const cameraRight = new THREE.Vector3();
         cameraRight.crossVectors(cameraDirection, new THREE.Vector3(0, 1, 0)).normalize();
         
+        let moved = false;
+        
         if (this.keysPressed.has('w') || this.keysPressed.has('W')) {
             const moveVector = cameraDirection.clone().multiplyScalar(moveSpeed);
             obj.mesh.position.add(moveVector);
+            moved = true;
         }
         
         if (this.keysPressed.has('s') || this.keysPressed.has('S')) {
             const moveVector = cameraDirection.clone().multiplyScalar(-moveSpeed);
             obj.mesh.position.add(moveVector);
+            moved = true;
         }
         
         if (this.keysPressed.has('a') || this.keysPressed.has('A')) {
             const moveVector = cameraRight.clone().multiplyScalar(-moveSpeed);
             obj.mesh.position.add(moveVector);
+            moved = true;
         }
         
         if (this.keysPressed.has('d') || this.keysPressed.has('D')) {
             const moveVector = cameraRight.clone().multiplyScalar(moveSpeed);
             obj.mesh.position.add(moveVector);
+            moved = true;
         }
         
         if (this.keysPressed.has('i') || this.keysPressed.has('I')) {
             obj.mesh.position.y += verticalSpeed;
+            moved = true;
         }
         
         if (this.keysPressed.has('k') || this.keysPressed.has('K')) {
@@ -779,6 +915,7 @@ export class ExperimentEngine {
             const minAllowedY = tableTopY + Math.abs(obj.mesh.position.y - minY);
             if (obj.mesh.position.y - verticalSpeed >= minAllowedY) {
                 obj.mesh.position.y -= verticalSpeed;
+                moved = true;
             }
         }
         
@@ -814,6 +951,53 @@ export class ExperimentEngine {
             obj.mesh.rotation.z = THREE.MathUtils.clamp(newEuler.z, -maxTilt, maxTilt);
         }
         
+        if (moved) {
+            obj.mesh.updateMatrixWorld(true);
+            const activeBox = new THREE.Box3().setFromObject(obj.mesh);
+            const activeSize = activeBox.getSize(new THREE.Vector3());
+            const activeRadius = Math.max(activeSize.x, activeSize.z) / 2;
+            const activeCenter = activeBox.getCenter(new THREE.Vector3());
+            
+            for (const [name, otherObj] of this.objects) {
+                if (otherObj !== obj && otherObj.physicsBody) {
+                    otherObj.mesh.updateMatrixWorld(true);
+                    const otherBox = new THREE.Box3().setFromObject(otherObj.mesh);
+                    const otherSize = otherBox.getSize(new THREE.Vector3());
+                    const otherRadius = Math.max(otherSize.x, otherSize.z) / 2;
+                    const otherCenter = otherBox.getCenter(new THREE.Vector3());
+                    
+                    const boxesIntersect = activeBox.intersectsBox(otherBox);
+                    const distance = activeCenter.distanceTo(otherCenter);
+                    const minDistance = activeRadius + otherRadius;
+                    
+                    if (boxesIntersect || (distance < minDistance && distance > 0.001)) {
+                        let direction = new THREE.Vector3().subVectors(activeCenter, otherCenter);
+                        if (direction.length() < 0.001) {
+                            direction.set(1, 0, 0);
+                        } else {
+                            direction.normalize();
+                        }
+                        const correction = boxesIntersect ? Math.max(minDistance - distance, 0.05) : (minDistance - distance);
+                        obj.mesh.position.add(direction.multiplyScalar(correction));
+                        obj.mesh.updateMatrixWorld(true);
+                        activeCenter.copy(new THREE.Box3().setFromObject(obj.mesh).getCenter(new THREE.Vector3()));
+                    }
+                }
+            }
+            
+            if (this.physicsEnabled && obj.physicsBody && this.physicsManager) {
+                obj.mesh.updateMatrixWorld(true);
+                const finalBox = new THREE.Box3().setFromObject(obj.mesh);
+                const finalCenter = finalBox.getCenter(new THREE.Vector3());
+                if (obj.centerOffset) {
+                    const bodyPos = new THREE.Vector3().addVectors(obj.mesh.position, obj.centerOffset);
+                    this.physicsManager.setBodyPosition(obj.physicsBody, bodyPos);
+                } else {
+                    this.physicsManager.setBodyPosition(obj.physicsBody, finalCenter);
+                }
+            }
+        }
+        
         this.constrainToTable(obj);
     }
 
@@ -836,78 +1020,65 @@ export class ExperimentEngine {
     constrainToTable(obj) {
         if (!this.tableBounds || !obj.interactions.draggable) return;
         
-        if (this.physicsEnabled && obj.physicsBody) {
-            const box = new THREE.Box3().setFromObject(obj.mesh);
-            const size = box.getSize(new THREE.Vector3());
-            const minY = box.min.y;
-            const position = obj.mesh.position;
-            
-            const tableTopY = this.tableBounds.y;
-            const beakerBottomOffset = position.y - minY;
-            const minAllowedY = tableTopY + beakerBottomOffset;
-            
-            if (position.y < minAllowedY && obj.physicsBody) {
-                this.physicsManager.setBodyPosition(obj.physicsBody, new THREE.Vector3(position.x, minAllowedY, position.z));
+        obj.mesh.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(obj.mesh);
+        const size = box.getSize(new THREE.Vector3());
+        const minY = box.min.y;
+        const position = obj.mesh.position;
+        const tableTopY = this.tableBounds.y;
+        
+        let needsCorrection = false;
+        
+        if (minY < tableTopY) {
+            const correction = tableTopY - minY;
+            obj.mesh.position.y += correction;
+            obj.mesh.updateMatrixWorld(true);
+            needsCorrection = true;
+        }
+        
+        const halfWidth = size.x / 2;
+        const halfDepth = size.z / 2;
+        let constrained = false;
+        let newX = obj.mesh.position.x;
+        let newZ = obj.mesh.position.z;
+        
+        if (obj.mesh.position.x - halfWidth < this.tableBounds.minX) {
+            newX = this.tableBounds.minX + halfWidth;
+            constrained = true;
+        }
+        if (obj.mesh.position.x + halfWidth > this.tableBounds.maxX) {
+            newX = this.tableBounds.maxX - halfWidth;
+            constrained = true;
+        }
+        
+        if (obj.mesh.position.z - halfDepth < this.tableBounds.minZ) {
+            newZ = this.tableBounds.minZ + halfDepth;
+            constrained = true;
+        }
+        if (obj.mesh.position.z + halfDepth > this.tableBounds.maxZ) {
+            newZ = this.tableBounds.maxZ - halfDepth;
+            constrained = true;
+        }
+        
+        if (constrained) {
+            obj.mesh.position.x = newX;
+            obj.mesh.position.z = newZ;
+            obj.mesh.updateMatrixWorld(true);
+            needsCorrection = true;
+        }
+        
+        if (needsCorrection && this.physicsEnabled && obj.physicsBody && this.physicsManager) {
+            const correctedBox = new THREE.Box3().setFromObject(obj.mesh);
+            const correctedCenter = correctedBox.getCenter(new THREE.Vector3());
+            if (obj.centerOffset) {
+                const bodyPos = new THREE.Vector3().addVectors(obj.mesh.position, obj.centerOffset);
+                this.physicsManager.setBodyPosition(obj.physicsBody, bodyPos);
+            } else {
+                this.physicsManager.setBodyPosition(obj.physicsBody, correctedCenter);
             }
-            
-            const halfWidth = size.x / 2;
-            const halfDepth = size.z / 2;
-            
-            let constrained = false;
-            let newX = position.x;
-            let newZ = position.z;
-            
-            if (position.x - halfWidth < this.tableBounds.minX) {
-                newX = this.tableBounds.minX + halfWidth;
-                constrained = true;
-            }
-            if (position.x + halfWidth > this.tableBounds.maxX) {
-                newX = this.tableBounds.maxX - halfWidth;
-                constrained = true;
-            }
-            
-            if (position.z - halfDepth < this.tableBounds.minZ) {
-                newZ = this.tableBounds.minZ + halfDepth;
-                constrained = true;
-            }
-            if (position.z + halfDepth > this.tableBounds.maxZ) {
-                newZ = this.tableBounds.maxZ - halfDepth;
-                constrained = true;
-            }
-            
-            if (constrained && obj.physicsBody) {
-                this.physicsManager.setBodyPosition(obj.physicsBody, new THREE.Vector3(newX, position.y, newZ));
-            }
-        } else {
-            const box = new THREE.Box3().setFromObject(obj.mesh);
-            const size = box.getSize(new THREE.Vector3());
-            const minY = box.min.y;
-            const position = obj.mesh.position;
-            
-            const tableTopY = this.tableBounds.y;
-            const beakerBottomOffset = position.y - minY;
-            const minAllowedY = tableTopY + beakerBottomOffset;
-            
-            if (position.y < minAllowedY) {
-                position.y = minAllowedY;
-            }
-            
-            const halfWidth = size.x / 2;
-            const halfDepth = size.z / 2;
-            
-            if (position.x - halfWidth < this.tableBounds.minX) {
-                position.x = this.tableBounds.minX + halfWidth;
-            }
-            if (position.x + halfWidth > this.tableBounds.maxX) {
-                position.x = this.tableBounds.maxX - halfWidth;
-            }
-            
-            if (position.z - halfDepth < this.tableBounds.minZ) {
-                position.z = this.tableBounds.minZ + halfDepth;
-            }
-            if (position.z + halfDepth > this.tableBounds.maxZ) {
-                position.z = this.tableBounds.maxZ - halfDepth;
-            }
+            obj.physicsBody.velocity.set(0, 0, 0);
+            obj.physicsBody.angularVelocity.set(0, 0, 0);
+            obj.physicsBody.wakeUp();
         }
     }
 

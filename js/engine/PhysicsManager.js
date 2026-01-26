@@ -95,7 +95,9 @@ export class PhysicsManager {
         this.world.solver.iterations = this.solverIterations;
         this.world.defaultContactMaterial.friction = 0.4;
         this.world.defaultContactMaterial.restitution = 0.3;
-        this.world.allowSleep = true;
+        this.world.allowSleep = false;
+        this.world.defaultContactMaterial.contactEquationStiffness = 1e8;
+        this.world.defaultContactMaterial.contactEquationRelaxation = 3;
 
         this.createMaterials();
     }
@@ -111,7 +113,7 @@ export class PhysicsManager {
         objectMaterial.friction = 0.6;
         objectMaterial.restitution = 0.2;
 
-        const contactMaterial = new this.CANNON.ContactMaterial(
+        const tableObjectContact = new this.CANNON.ContactMaterial(
             tableMaterial,
             objectMaterial,
             {
@@ -119,7 +121,19 @@ export class PhysicsManager {
                 restitution: 0.2
             }
         );
-        this.world.addContactMaterial(contactMaterial);
+        this.world.addContactMaterial(tableObjectContact);
+
+        const objectObjectContact = new this.CANNON.ContactMaterial(
+            objectMaterial,
+            objectMaterial,
+            {
+                friction: 0.6,
+                restitution: 0.3,
+                contactEquationStiffness: 1e8,
+                contactEquationRelaxation: 3
+            }
+        );
+        this.world.addContactMaterial(objectObjectContact);
 
         this.materials.set('table', tableMaterial);
         this.materials.set('object', objectMaterial);
@@ -152,6 +166,7 @@ export class PhysicsManager {
     createCylinderBody(mesh, mass = 1, material = 'object') {
         if (!this.CANNON || !this.world) return null;
 
+        mesh.updateMatrixWorld(true);
         const box = new THREE.Box3().setFromObject(mesh);
         const size = box.getSize(new THREE.Vector3());
         const radius = Math.max(size.x, size.z) / 2;
@@ -162,7 +177,7 @@ export class PhysicsManager {
             radius,
             radius,
             height,
-            8
+            16
         );
         const body = new this.CANNON.Body({ mass: mass });
         
@@ -186,6 +201,8 @@ export class PhysicsManager {
 
         const mat = this.materials.get(material) || this.materials.get('object');
         body.material = mat;
+        body.collisionFilterGroup = 1;
+        body.collisionFilterMask = -1;
 
         this.world.addBody(body);
         return body;
@@ -231,6 +248,8 @@ export class PhysicsManager {
             tableBounds.y - 0.05,
             (tableBounds.minZ + tableBounds.maxZ) / 2
         );
+        body.collisionFilterGroup = 2;
+        body.collisionFilterMask = -1;
 
         this.world.addBody(body);
         return body;
