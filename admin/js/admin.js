@@ -285,13 +285,34 @@ function addInitialState() {
                 <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #2c3e50;">Temperature (°C)</label>
                 <input type="number" name="initialState[${initialStateIndex}][temperature]" placeholder="20" min="-273" step="0.1" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
             </div>
-            <div>
-                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #2c3e50;">Contents (comma-separated)</label>
-                <input type="text" name="initialState[${initialStateIndex}][contents]" placeholder="e.g., water, acid" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            </div>
-            <div>
-                <button type="button" onclick="this.closest('.initial-state-item').remove()" style="padding: 8px 15px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer;">Remove</button>
-            </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #2c3e50;">Contents (comma-separated)</label>
+                        <input type="text" name="initialState[${initialStateIndex}][contents]" placeholder="e.g., water, acid" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div>
+                        <button type="button" onclick="this.closest('.initial-state-item').remove()" style="padding: 8px 15px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer;">Remove</button>
+                    </div>
+                </div>
+                <div style="margin-top: 15px; padding: 15px; background: #fff; border-radius: 6px; border: 1px solid #e0e6ed;">
+                    <h4 style="margin: 0 0 10px 0; color: #2c3e50; font-size: 14px;">Color Configuration</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #2c3e50; font-size: 12px;">Initial Color (Hex)</label>
+                            <input type="text" name="initialState[${initialStateIndex}][initialColor]" placeholder="#4a90e2" pattern="#[0-9a-fA-F]{6}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                            <small style="color: #7f8c8d; font-size: 11px;">Color when at room temperature</small>
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #2c3e50; font-size: 12px;">After Boiling (Hex)</label>
+                            <input type="text" name="initialState[${initialStateIndex}][boilingColor]" placeholder="#ff6b6b" pattern="#[0-9a-fA-F]{6}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                            <small style="color: #7f8c8d; font-size: 11px;">Color when temperature > 80°C</small>
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #2c3e50; font-size: 12px;">After Cooling (Hex)</label>
+                            <input type="text" name="initialState[${initialStateIndex}][coolingColor]" placeholder="#4a90e2" pattern="#[0-9a-fA-F]{6}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                            <small style="color: #7f8c8d; font-size: 11px;">Color when temperature < 20°C</small>
+                        </div>
+                    </div>
+                </div>
         </div>
     `;
     document.getElementById('initial-states').appendChild(div);
@@ -328,6 +349,26 @@ function loadInitialStates(initialStates) {
                     </div>
                     <div>
                         <button type="button" onclick="this.closest('.initial-state-item').remove()" style="padding: 8px 15px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer;">Remove</button>
+                    </div>
+                </div>
+                <div style="margin-top: 15px; padding: 15px; background: #fff; border-radius: 6px; border: 1px solid #e0e6ed;">
+                    <h4 style="margin: 0 0 10px 0; color: #2c3e50; font-size: 14px;">Color Configuration</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #2c3e50; font-size: 12px;">Initial Color (Hex)</label>
+                            <input type="text" name="initialState[${initialStateIndex}][initialColor]" value="${state.initialColor || ''}" placeholder="#4a90e2" pattern="#[0-9a-fA-F]{6}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                            <small style="color: #7f8c8d; font-size: 11px;">Color when at room temperature</small>
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #2c3e50; font-size: 12px;">After Boiling (Hex)</label>
+                            <input type="text" name="initialState[${initialStateIndex}][boilingColor]" value="${state.boilingColor || ''}" placeholder="#ff6b6b" pattern="#[0-9a-fA-F]{6}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                            <small style="color: #7f8c8d; font-size: 11px;">Color when temperature > 80°C</small>
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #2c3e50; font-size: 12px;">After Cooling (Hex)</label>
+                            <input type="text" name="initialState[${initialStateIndex}][coolingColor]" value="${state.coolingColor || ''}" placeholder="#4a90e2" pattern="#[0-9a-fA-F]{6}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                            <small style="color: #7f8c8d; font-size: 11px;">Color when temperature < 20°C</small>
+                        </div>
                     </div>
                 </div>
             `;

@@ -206,6 +206,34 @@
             margin-top: 20px;
         }
 
+        .student-controls input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            background: #555;
+            border-radius: 3px;
+            outline: none;
+        }
+
+        .student-controls input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #4CAF50;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .student-controls input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: #4CAF50;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
         .measurement-item {
             display: flex;
             justify-content: space-between;
@@ -435,6 +463,42 @@
                 <h3>Measurements</h3>
                 <div id="measurement-items"></div>
             </div>
+
+            <div class="student-controls" id="student-controls" style="background: #333; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #FF9800;">
+                <h3 style="margin-top: 0; margin-bottom: 15px; color: #FF9800;">Controls</h3>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #fff;">Temperature (°C)</label>
+                    <input type="range" id="temperature-slider" min="0" max="200" value="20" step="1" style="width: 100%;">
+                    <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                        <span style="color: #aaa; font-size: 12px;">0°C</span>
+                        <span id="temperature-value" style="color: #fff; font-weight: 600;">20°C</span>
+                        <span style="color: #aaa; font-size: 12px;">200°C</span>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #fff;">Volume (ml)</label>
+                    <input type="number" id="volume-input" min="0" max="1000" value="0" step="10" style="width: 100%; padding: 8px; background: #444; color: #fff; border: 1px solid #555; border-radius: 4px;">
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #fff;">Time (seconds)</label>
+                    <input type="number" id="time-input" min="0" value="0" step="1" style="width: 100%; padding: 8px; background: #444; color: #fff; border: 1px solid #555; border-radius: 4px;">
+                </div>
+
+                <div style="margin-top: 15px; padding: 10px; background: #2a2a2a; border-radius: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <span style="color: #aaa; font-size: 13px;">Timer:</span>
+                        <span id="timer-display" style="color: #4CAF50; font-size: 18px; font-weight: 600; font-family: 'Courier New', monospace;">00:00</span>
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <button id="timer-start" style="flex: 1; padding: 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">Start</button>
+                        <button id="timer-pause" style="flex: 1; padding: 8px; background: #FF9800; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">Pause</button>
+                        <button id="timer-reset" style="flex: 1; padding: 8px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">Reset</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -539,9 +603,106 @@
                 }
                 
                 updateMeasurements();
+                setupStudentControls();
             } catch (error) {
                 console.error('Failed to load experiment:', error);
                 document.getElementById('experiment-title').textContent = 'Error Loading Experiment';
+            }
+        }
+
+        let timerInterval = null;
+        let timerSeconds = 0;
+        let timerRunning = false;
+
+        function setupStudentControls() {
+            const temperatureSlider = document.getElementById('temperature-slider');
+            const temperatureValue = document.getElementById('temperature-value');
+            const volumeInput = document.getElementById('volume-input');
+            const timeInput = document.getElementById('time-input');
+            const timerDisplay = document.getElementById('timer-display');
+            const timerStart = document.getElementById('timer-start');
+            const timerPause = document.getElementById('timer-pause');
+            const timerReset = document.getElementById('timer-reset');
+
+            if (temperatureSlider && temperatureValue) {
+                temperatureSlider.addEventListener('input', (e) => {
+                    const temp = parseInt(e.target.value);
+                    temperatureValue.textContent = temp + '°C';
+                    if (engine && engine.selectedObject) {
+                        engine.selectedObject.properties.temperature = temp;
+                    }
+                });
+            }
+
+            if (volumeInput) {
+                volumeInput.addEventListener('change', (e) => {
+                    const volume = parseFloat(e.target.value);
+                    if (engine && engine.selectedObject) {
+                        engine.selectedObject.properties.volume = volume;
+                    }
+                });
+            }
+
+            if (timeInput) {
+                timeInput.addEventListener('change', (e) => {
+                    const time = parseInt(e.target.value);
+                    if (timerRunning) {
+                        timerSeconds = time;
+                        updateTimerDisplay();
+                    }
+                });
+            }
+
+            if (timerStart) {
+                timerStart.addEventListener('click', () => {
+                    if (!timerRunning) {
+                        timerRunning = true;
+                        timerInterval = setInterval(() => {
+                            timerSeconds++;
+                            updateTimerDisplay();
+                            if (timeInput) {
+                                timeInput.value = timerSeconds;
+                            }
+                        }, 1000);
+                    }
+                });
+            }
+
+            if (timerPause) {
+                timerPause.addEventListener('click', () => {
+                    if (timerRunning) {
+                        timerRunning = false;
+                        if (timerInterval) {
+                            clearInterval(timerInterval);
+                            timerInterval = null;
+                        }
+                    }
+                });
+            }
+
+            if (timerReset) {
+                timerReset.addEventListener('click', () => {
+                    timerRunning = false;
+                    if (timerInterval) {
+                        clearInterval(timerInterval);
+                        timerInterval = null;
+                    }
+                    timerSeconds = 0;
+                    updateTimerDisplay();
+                    if (timeInput) {
+                        timeInput.value = 0;
+                    }
+                });
+            }
+
+            function updateTimerDisplay() {
+                if (timerDisplay) {
+                    const minutes = Math.floor(timerSeconds / 60);
+                    const seconds = timerSeconds % 60;
+                    timerDisplay.textContent = 
+                        String(minutes).padStart(2, '0') + ':' + 
+                        String(seconds).padStart(2, '0');
+                }
             }
         }
 

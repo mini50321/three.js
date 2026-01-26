@@ -25,12 +25,15 @@ if ($_POST['mode'] === 'create') {
                     $contents = array_filter($contents);
                 }
                 
-                $initialState[] = [
-                    'objectName' => $state['objectName'],
-                    'volume' => isset($state['volume']) && $state['volume'] !== '' ? floatval($state['volume']) : null,
-                    'temperature' => isset($state['temperature']) && $state['temperature'] !== '' ? floatval($state['temperature']) : null,
-                    'contents' => $contents
-                ];
+            $initialState[] = [
+                'objectName' => $state['objectName'],
+                'volume' => isset($state['volume']) && $state['volume'] !== '' ? floatval($state['volume']) : null,
+                'temperature' => isset($state['temperature']) && $state['temperature'] !== '' ? floatval($state['temperature']) : null,
+                'contents' => $contents,
+                'initialColor' => !empty($state['initialColor']) ? $state['initialColor'] : null,
+                'boilingColor' => !empty($state['boilingColor']) ? $state['boilingColor'] : null,
+                'coolingColor' => !empty($state['coolingColor']) ? $state['coolingColor'] : null
+            ];
             }
         }
     }
@@ -177,12 +180,15 @@ if ($_POST['mode'] === 'create') {
                     $contents = array_filter($contents);
                 }
                 
-                $initialState[] = [
-                    'objectName' => $state['objectName'],
-                    'volume' => isset($state['volume']) && $state['volume'] !== '' ? floatval($state['volume']) : null,
-                    'temperature' => isset($state['temperature']) && $state['temperature'] !== '' ? floatval($state['temperature']) : null,
-                    'contents' => $contents
-                ];
+            $initialState[] = [
+                'objectName' => $state['objectName'],
+                'volume' => isset($state['volume']) && $state['volume'] !== '' ? floatval($state['volume']) : null,
+                'temperature' => isset($state['temperature']) && $state['temperature'] !== '' ? floatval($state['temperature']) : null,
+                'contents' => $contents,
+                'initialColor' => !empty($state['initialColor']) ? $state['initialColor'] : null,
+                'boilingColor' => !empty($state['boilingColor']) ? $state['boilingColor'] : null,
+                'coolingColor' => !empty($state['coolingColor']) ? $state['coolingColor'] : null
+            ];
             }
         }
     }

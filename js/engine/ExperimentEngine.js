@@ -240,12 +240,12 @@ export class ExperimentEngine {
     }
 
     setupLighting() {
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
         this.scene.add(ambientLight);
 
         const shadowsEnabled = this.performanceManager.getShadowsEnabled();
         const quality = this.performanceManager.getQuality();
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, shadowsEnabled ? 0.6 : 0.8);
         directionalLight.position.set(10, 10, 5);
         directionalLight.castShadow = shadowsEnabled;
         
@@ -259,11 +259,15 @@ export class ExperimentEngine {
             directionalLight.shadow.camera.right = 10;
             directionalLight.shadow.camera.top = 10;
             directionalLight.shadow.camera.bottom = -10;
+            directionalLight.shadow.bias = -0.0001;
+            directionalLight.shadow.normalBias = 0.02;
+            directionalLight.shadow.radius = 6;
+            this.renderer.shadowMap.autoUpdate = true;
         }
         
         this.scene.add(directionalLight);
 
-        const pointLight = new THREE.PointLight(0xffffff, 0.4);
+        const pointLight = new THREE.PointLight(0xffffff, 0.5);
         pointLight.position.set(-10, 10, -10);
         this.scene.add(pointLight);
     }
@@ -306,10 +310,19 @@ export class ExperimentEngine {
     async loadModels() {
         const loader = new GLTFLoader();
         
-        const modelsToLoad = [
-            { path: 'assets/models/Beaker.glb', name: 'Beaker' },
-            { path: 'assets/models/Conical.glb', name: 'Conical' }
-        ];
+        let modelsToLoad = [];
+        
+        if (this.config.models && Array.isArray(this.config.models) && this.config.models.length > 0) {
+            modelsToLoad = this.config.models.map(modelPath => {
+                const modelName = this.extractModelName(modelPath);
+                return { path: modelPath, name: modelName };
+            });
+        } else {
+            modelsToLoad = [
+                { path: 'assets/models/Beaker.glb', name: 'Beaker' },
+                { path: 'assets/models/Conical.glb', name: 'Conical' }
+            ];
+        }
         
         for (const modelConfig of modelsToLoad) {
             const modelPath = modelConfig.path;
@@ -1491,9 +1504,21 @@ export class ExperimentEngine {
             'litmus': 0x9370db
         };
         
+        if (this.config.initialState && Array.isArray(this.config.initialState)) {
+            const initialState = this.config.initialState.find(state => state.objectName === obj.name);
+            if (initialState) {
+                if (initialState.initialColor) {
+                    const colorStr = initialState.initialColor.startsWith('#') ? initialState.initialColor : '#' + initialState.initialColor;
+                    baseColor = new THREE.Color(colorStr);
+                }
+            }
+        }
+        
         if (contents.length === 1) {
             const contentType = contents[0].type?.toLowerCase() || 'water';
-            baseColor = new THREE.Color(colorMap[contentType] || colorMap['water']);
+            if (!this.config.initialState || !this.config.initialState.find(s => s.objectName === obj.name && s.initialColor)) {
+                baseColor = new THREE.Color(colorMap[contentType] || colorMap['water']);
+            }
         } else {
             let r = 0, g = 0, b = 0;
             let totalVolume = 0;
@@ -1508,13 +1533,22 @@ export class ExperimentEngine {
                 b += color.b * vol;
             });
             
-            if (totalVolume > 0) {
+            if (totalVolume > 0 && (!this.config.initialState || !this.config.initialState.find(s => s.objectName === obj.name && s.initialColor))) {
                 baseColor = new THREE.Color(r / totalVolume, g / totalVolume, b / totalVolume);
             }
         }
         
         const temp = obj.properties.temperature || 20;
-        if (temp > 80) {
+        const initialState = this.config.initialState && Array.isArray(this.config.initialState) ? 
+            this.config.initialState.find(state => state.objectName === obj.name) : null;
+        
+        if (temp > 80 && initialState && initialState.boilingColor) {
+            const colorStr = initialState.boilingColor.startsWith('#') ? initialState.boilingColor : '#' + initialState.boilingColor;
+            baseColor = new THREE.Color(colorStr);
+        } else if (temp < 20 && initialState && initialState.coolingColor) {
+            const colorStr = initialState.coolingColor.startsWith('#') ? initialState.coolingColor : '#' + initialState.coolingColor;
+            baseColor = new THREE.Color(colorStr);
+        } else if (temp > 80) {
             const heatFactor = Math.min((temp - 80) / 120, 1);
             baseColor.r = Math.min(baseColor.r + heatFactor * 0.3, 1);
             baseColor.g = Math.max(baseColor.g - heatFactor * 0.2, 0);
