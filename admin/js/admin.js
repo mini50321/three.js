@@ -314,7 +314,7 @@ function addInitialState() {
             </div>
         </div>
         <div class="color-config">
-            <h4 style="margin: 0 0 16px 0; color: #92400e; font-size: 15px; font-weight: 700;">🎨 Color Configuration</h4>
+            <h4 style="margin: 0 0 16px 0; color: #92400e; font-size: 15px; font-weight: 700;"><span class="icon icon-palette"></span>Color Configuration</h4>
             <div class="color-grid">
                 <div class="color-field">
                     <label>Initial Color (Hex)</label>
@@ -370,7 +370,7 @@ function loadInitialStates(initialStates) {
                     </div>
                 </div>
                 <div class="color-config">
-                    <h4 style="margin: 0 0 16px 0; color: #92400e; font-size: 15px; font-weight: 700;">🎨 Color Configuration</h4>
+                    <h4 style="margin: 0 0 16px 0; color: #92400e; font-size: 15px; font-weight: 700;"><span class="icon icon-palette"></span>Color Configuration</h4>
                     <div class="color-grid">
                         <div class="color-field">
                             <label>Initial Color (Hex)</label>
@@ -401,7 +401,7 @@ function addReaction() {
     div.className = 'reaction-card';
     div.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h4 style="margin: 0; color: #1a202c; font-size: 18px; font-weight: 700;">⚗️ Reaction ${reactionIndex + 1}</h4>
+            <h4 style="margin: 0; color: #1a202c; font-size: 18px; font-weight: 700;"><span class="icon icon-reaction"></span>Reaction ${reactionIndex + 1}</h4>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
             <div class="form-group">
