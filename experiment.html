@@ -557,7 +557,22 @@
                 document.getElementById('total-steps').textContent = experimentConfig.steps?.length || 0;
                 document.getElementById('max-score').textContent = experimentConfig.steps?.reduce((sum, step) => sum + (step.points || 10), 0) || 0;
 
-                engine = new ExperimentEngine('canvas-container', experimentConfig);
+                try {
+                    engine = new ExperimentEngine('canvas-container', experimentConfig);
+                    
+                    if (!experimentConfig.steps || experimentConfig.steps.length === 0) {
+                        console.warn('Experiment has no steps configured');
+                        document.getElementById('start-btn').disabled = true;
+                        document.getElementById('step-instruction').textContent = 'This experiment has no steps. Please configure steps in the admin panel.';
+                    } else {
+                        document.getElementById('start-btn').disabled = false;
+                    }
+                } catch (error) {
+                    console.error('Error initializing experiment engine:', error);
+                    document.getElementById('experiment-title').textContent = 'Error Loading Experiment';
+                    document.getElementById('step-instruction').textContent = 'Failed to load experiment: ' + error.message;
+                    document.getElementById('start-btn').disabled = true;
+                }
                 
                 const qualitySelect = document.getElementById('quality-select');
                 const fpsInfo = document.getElementById('fps-info');
@@ -707,19 +722,54 @@
         }
 
         function updateStepInfo() {
-            const stepInfo = engine.getCurrentStepInfo();
-            if (stepInfo) {
-                document.getElementById('step-instruction').textContent = stepInfo.instruction || 'No instruction';
-            } else {
-                document.getElementById('step-instruction').textContent = 'Experiment Complete!';
+            try {
+                if (!engine) {
+                    console.error('Engine not available in updateStepInfo');
+                    return;
+                }
+                
+                const stepInfo = engine.getCurrentStepInfo();
+                const instructionElement = document.getElementById('step-instruction');
+                
+                if (!instructionElement) {
+                    console.error('Step instruction element not found');
+                    return;
+                }
+                
+                if (stepInfo) {
+                    instructionElement.textContent = stepInfo.instruction || 'No instruction';
+                } else {
+                    instructionElement.textContent = 'Experiment Complete!';
+                }
+            } catch (error) {
+                console.error('Error updating step info:', error);
             }
         }
 
         function updateProgress() {
-            const progress = engine.getProgress();
-            document.getElementById('progress-fill').style.width = progress + '%';
-            document.getElementById('current-step').textContent = engine.currentStep;
-            document.getElementById('score').textContent = engine.getScore();
+            try {
+                if (!engine) {
+                    console.error('Engine not available in updateProgress');
+                    return;
+                }
+                
+                const progress = engine.getProgress();
+                const progressFill = document.getElementById('progress-fill');
+                const currentStepEl = document.getElementById('current-step');
+                const scoreEl = document.getElementById('score');
+                
+                if (progressFill) {
+                    progressFill.style.width = progress + '%';
+                }
+                if (currentStepEl) {
+                    currentStepEl.textContent = engine.currentStep || 0;
+                }
+                if (scoreEl) {
+                    scoreEl.textContent = engine.getScore ? engine.getScore() : 0;
+                }
+            } catch (error) {
+                console.error('Error updating progress:', error);
+            }
         }
 
         function updateFeedback() {
@@ -760,12 +810,34 @@
         }
 
         document.getElementById('start-btn').addEventListener('click', () => {
-            if (engine) {
+            try {
+                if (!engine) {
+                    console.error('Engine not initialized');
+                    alert('Experiment engine not loaded. Please refresh the page.');
+                    return;
+                }
+                
+                if (!experimentConfig) {
+                    console.error('Experiment config not loaded');
+                    alert('Experiment configuration not found.');
+                    return;
+                }
+                
+                if (!experimentConfig.steps || experimentConfig.steps.length === 0) {
+                    console.error('No steps configured');
+                    alert('This experiment has no steps configured. Please configure steps in the admin panel.');
+                    return;
+                }
+                
                 engine.start();
                 document.getElementById('start-btn').disabled = true;
                 document.getElementById('reset-btn').disabled = false;
                 document.getElementById('validate-btn').disabled = false;
                 updateStepInfo();
+                updateProgress();
+            } catch (error) {
+                console.error('Error starting experiment:', error);
+                alert('Error starting experiment: ' + error.message);
             }
         });
 

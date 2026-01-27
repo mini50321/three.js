@@ -448,9 +448,24 @@ export class ExperimentEngine {
                 const initialTemperature = initialStateForObject?.temperature !== null && initialStateForObject?.temperature !== undefined 
                     ? initialStateForObject.temperature 
                     : (modelProps.temperature || 20);
-                const initialContents = initialStateForObject?.contents && initialStateForObject.contents.length > 0
+                let initialContents = initialStateForObject?.contents && initialStateForObject.contents.length > 0
                     ? initialStateForObject.contents
                     : (modelProps.contents || []);
+                
+                if (initialContents.length > 0 && typeof initialContents[0] === 'string') {
+                    const volume = initialVolume || 0;
+                    if (volume > 0) {
+                        initialContents = initialContents.map(content => ({
+                            type: content,
+                            volume: volume / initialContents.length
+                        }));
+                    }
+                } else if (initialContents.length === 0 && initialVolume > 0) {
+                    initialContents = [{
+                        type: 'water',
+                        volume: initialVolume
+                    }];
+                }
                 
                 const objectData = {
                     mesh: model,
@@ -551,11 +566,13 @@ export class ExperimentEngine {
                 
                 this.objects.set(modelName, objectData);
                 
-                if (objectData.properties.isContainer) {
-                    this.createLiquidMesh(objectData);
-                }
-                
                 this.scene.add(model);
+                
+                if (objectData.properties.isContainer) {
+                    setTimeout(() => {
+                        this.createLiquidMesh(objectData);
+                    }, 100);
+                }
             } catch (error) {
                 console.error(`Failed to load model ${modelPath}:`, error);
             }
@@ -563,6 +580,17 @@ export class ExperimentEngine {
         
         this.setupInteractions();
         this.storeInitialState();
+        
+        setTimeout(() => {
+            for (const [name, obj] of this.objects) {
+                if (obj.properties.isContainer) {
+                    const volume = this.calculateVolume(obj);
+                    if (volume > 0) {
+                        this.createLiquidMesh(obj);
+                    }
+                }
+            }
+        }, 300);
     }
 
     getInitialStateForObject(objectName) {
@@ -1327,9 +1355,23 @@ export class ExperimentEngine {
         if (!obj.properties.isContainer) return 0;
         
         let totalVolume = 0;
-        obj.properties.contents.forEach(content => {
-            totalVolume += content.volume || 0;
-        });
+        
+        if (obj.properties.contents && Array.isArray(obj.properties.contents) && obj.properties.contents.length > 0) {
+            obj.properties.contents.forEach(content => {
+                if (typeof content === 'object' && content.volume !== undefined) {
+                    totalVolume += content.volume || 0;
+                } else if (typeof content === 'string') {
+                    const volume = obj.properties.volume || 0;
+                    if (totalVolume === 0) {
+                        totalVolume = volume;
+                    }
+                }
+            });
+        }
+        
+        if (totalVolume === 0 && obj.properties.volume !== undefined && obj.properties.volume > 0) {
+            totalVolume = obj.properties.volume;
+        }
         
         return Math.min(totalVolume, obj.properties.capacity || 1000);
     }
@@ -1337,13 +1379,22 @@ export class ExperimentEngine {
     calculateLiquidHeight(obj, volume) {
         if (!obj.properties.isContainer || volume <= 0) return 0;
         
-        const capacity = obj.properties.capacity || 1000;
-        const fillRatio = Math.min(volume / capacity, 1);
-        
         const box = obj.boundingBox;
         const size = box.getSize(new THREE.Vector3());
         const containerHeight = size.y;
-        const liquidHeight = containerHeight * fillRatio * 0.8;
+        
+        if (containerHeight <= 0) return 0;
+        
+        const capacity = obj.properties.capacity || 1000;
+        const fillRatio = Math.min(volume / capacity, 1);
+        
+        let liquidHeight = containerHeight * fillRatio * 0.85;
+        
+        const minVisibleHeight = Math.max(containerHeight * 0.1, 0.15);
+        liquidHeight = Math.max(liquidHeight, minVisibleHeight);
+        
+        const maxHeight = containerHeight * 0.9;
+        liquidHeight = Math.min(liquidHeight, maxHeight);
         
         return liquidHeight;
     }
@@ -1567,39 +1618,54 @@ export class ExperimentEngine {
             this.liquidMeshes.get(obj.name).material.dispose();
         }
         
-        const box = obj.boundingBox;
-        const size = box.getSize(new THREE.Vector3());
-        const minY = box.min.y;
+        obj.mesh.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(obj.mesh);
+        if (!box || box.isEmpty()) {
+            console.warn(`No bounding box for ${obj.name}`);
+            return;
+        }
         
-        const radius = Math.min(size.x, size.z) * 0.4;
-        const segments = this.performanceManager.getGeometrySegments();
+        const size = box.getSize(new THREE.Vector3());
+        const minYWorld = box.min.y;
         
         const volume = this.calculateVolume(obj);
         const liquidHeight = this.calculateLiquidHeight(obj, volume);
         
-        if (liquidHeight <= 0) {
+        if (liquidHeight <= 0 || volume <= 0) {
             return;
         }
+        
+        const radius = Math.min(size.x, size.z) * 0.45;
+        const segments = this.performanceManager.getGeometrySegments();
         
         const geometry = new THREE.CylinderGeometry(radius, radius, liquidHeight, segments);
         const color = this.getLiquidColor(obj);
         const material = new THREE.MeshStandardMaterial({
             color: color,
             transparent: true,
-            opacity: 0.7,
+            opacity: 0.85,
             side: THREE.DoubleSide,
-            roughness: 0.3,
-            metalness: 0.1
+            roughness: 0.2,
+            metalness: 0.2,
+            depthWrite: false
         });
         
         const liquidMesh = new THREE.Mesh(geometry, material);
-        liquidMesh.position.copy(obj.mesh.position);
-        liquidMesh.position.y = minY + liquidHeight / 2;
+        
+        const containerCenter = box.getCenter(new THREE.Vector3());
+        const containerBottom = minYWorld;
+        const liquidBottom = containerBottom + (size.y * 0.05);
+        const liquidCenterY = liquidBottom + liquidHeight / 2;
+        
+        liquidMesh.position.set(containerCenter.x, liquidCenterY, containerCenter.z);
         liquidMesh.userData.isLiquid = true;
         liquidMesh.userData.containerName = obj.name;
+        liquidMesh.renderOrder = 2;
         
         this.liquidMeshes.set(obj.name, liquidMesh);
         this.scene.add(liquidMesh);
+        
+        obj.mesh.renderOrder = 1;
     }
 
     updateLiquidMesh(obj) {
@@ -1622,10 +1688,11 @@ export class ExperimentEngine {
             return;
         }
         
-        const box = obj.boundingBox;
+        obj.mesh.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(obj.mesh);
         const size = box.getSize(new THREE.Vector3());
-        const minY = box.min.y;
-        const radius = Math.min(size.x, size.z) * 0.4;
+        const minYWorld = box.min.y;
+        const radius = Math.min(size.x, size.z) * 0.45;
         
         if (Math.abs(liquidMesh.geometry.parameters.height - liquidHeight) > 0.01) {
             liquidMesh.geometry.dispose();
@@ -1633,13 +1700,19 @@ export class ExperimentEngine {
             liquidMesh.geometry = new THREE.CylinderGeometry(radius, radius, liquidHeight, segments);
         }
         
-        liquidMesh.position.copy(obj.mesh.position);
-        liquidMesh.position.y = minY + liquidHeight / 2;
+        const containerCenter = box.getCenter(new THREE.Vector3());
+        const containerBottom = minYWorld;
+        const liquidBottom = containerBottom + (size.y * 0.05);
+        const liquidCenterY = liquidBottom + liquidHeight / 2;
+        
+        liquidMesh.position.set(containerCenter.x, liquidCenterY, containerCenter.z);
         
         const color = this.getLiquidColor(obj);
         liquidMesh.material.color.copy(color);
+        liquidMesh.material.opacity = 0.85;
         
         liquidMesh.rotation.copy(obj.mesh.rotation);
+        liquidMesh.renderOrder = 1;
     }
 
     onMouseDown(event) {
@@ -2016,6 +2089,10 @@ export class ExperimentEngine {
     }
 
     start() {
+        if (!this.config) {
+            throw new Error('Experiment configuration is missing');
+        }
+        
         this.isRunning = true;
         this.currentStep = 0;
         this.score = 0;
@@ -2023,8 +2100,14 @@ export class ExperimentEngine {
         this.stepHistory = [];
         this.measurements.time = Date.now();
         
-        if (this.config.steps) {
-            this.maxScore = this.config.steps.reduce((sum, step) => sum + (step.points || 10), 0);
+        if (this.config.steps && Array.isArray(this.config.steps)) {
+            this.maxScore = this.config.steps.reduce((sum, step) => {
+                const points = step.points || 10;
+                return sum + (typeof points === 'number' ? points : 10);
+            }, 0);
+        } else {
+            this.maxScore = 0;
+            console.warn('No steps configured for this experiment');
         }
     }
 
@@ -2086,6 +2169,10 @@ export class ExperimentEngine {
             }
             if (this.measurements.temperature) {
                 this.measurements.temperature[name] = obj.properties.temperature;
+            }
+            
+            if (obj.properties.isContainer) {
+                this.updateLiquidMesh(obj);
             }
         }
         
