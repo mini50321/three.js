@@ -144,7 +144,7 @@ function addCondition(stepIdx) {
         <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr 1fr; gap: 10px; align-items: end;">
             <div>
                 <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Type</label>
-                <select name="steps[${stepIdx}][rules][conditions][${condIdx}][type]" required style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                <select name="steps[${stepIdx}][rules][conditions][${condIdx}][type]" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
                     <option value="temperature">Temperature</option>
                     <option value="volume">Volume</option>
                     <option value="hasContent">Has Content</option>
@@ -153,7 +153,7 @@ function addCondition(stepIdx) {
             </div>
             <div>
                 <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Operator</label>
-                <select name="steps[${stepIdx}][rules][conditions][${condIdx}][operator]" required style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                <select name="steps[${stepIdx}][rules][conditions][${condIdx}][operator]" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
                     <option value=">">Greater than (>)</option>
                     <option value="<">Less than (<)</option>
                     <option value="==">Equals (==)</option>
@@ -161,7 +161,7 @@ function addCondition(stepIdx) {
             </div>
             <div>
                 <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Value</label>
-                <input type="number" name="steps[${stepIdx}][rules][conditions][${condIdx}][value]" placeholder="Value" step="0.1" required style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                <input type="number" name="steps[${stepIdx}][rules][conditions][${condIdx}][value]" placeholder="Value" step="0.1" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
             </div>
             <div>
                 <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Tolerance</label>
@@ -247,7 +247,7 @@ function loadStepRules(stepIdx, stepData) {
                 <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr 1fr; gap: 10px; align-items: end;">
                     <div>
                         <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Type</label>
-                        <select name="steps[${stepIdx}][rules][conditions][${idx}][type]" required style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                        <select name="steps[${stepIdx}][rules][conditions][${idx}][type]" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
                             <option value="temperature" ${condition.type === 'temperature' ? 'selected' : ''}>Temperature</option>
                             <option value="volume" ${condition.type === 'volume' ? 'selected' : ''}>Volume</option>
                             <option value="hasContent" ${condition.type === 'hasContent' ? 'selected' : ''}>Has Content</option>
@@ -256,7 +256,7 @@ function loadStepRules(stepIdx, stepData) {
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Operator</label>
-                        <select name="steps[${stepIdx}][rules][conditions][${idx}][operator]" required style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                        <select name="steps[${stepIdx}][rules][conditions][${idx}][operator]" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
                             <option value=">" ${condition.operator === '>' ? 'selected' : ''}>Greater than (>)</option>
                             <option value="<" ${condition.operator === '<' ? 'selected' : ''}>Less than (<)</option>
                             <option value="==" ${condition.operator === '==' ? 'selected' : ''}>Equals (==)</option>
@@ -264,7 +264,7 @@ function loadStepRules(stepIdx, stepData) {
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Value</label>
-                        <input type="number" name="steps[${stepIdx}][rules][conditions][${idx}][value]" value="${condition.value || ''}" placeholder="Value" step="0.1" required style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                        <input type="number" name="steps[${stepIdx}][rules][conditions][${idx}][value]" value="${condition.value || ''}" placeholder="Value" step="0.1" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Tolerance</label>

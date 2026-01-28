@@ -50,7 +50,6 @@ $experiments = $db->getAllExperiments();
                         <td>
                             <div class="actions">
                                 <a href="edit.php?id=<?= $exp['id'] ?>">Edit</a>
-                                <a href="preview.php?id=<?= $exp['id'] ?>" target="_blank">Preview</a>
                                 <a href="download.php?id=<?= $exp['id'] ?>">Download</a>
                                 <a class="danger" href="delete.php?id=<?= $exp['id'] ?>" onclick="return confirm('Are you sure you want to delete this experiment?')">Delete</a>
                             </div>
