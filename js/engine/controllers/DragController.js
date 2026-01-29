@@ -169,6 +169,11 @@ export class DragController {
                 }
             });
         }
+        
+        if (this.activeObject && this.engine.scaleController) {
+            this.engine.scaleController.onObjectPlaced(this.activeObject);
+        }
+        
         this.activeObject = null;
     }
 }

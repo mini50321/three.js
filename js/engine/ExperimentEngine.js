@@ -6,6 +6,7 @@ import { TiltController } from './controllers/TiltController.js';
 import { PourController } from './controllers/PourController.js';
 import { HeatController } from './controllers/HeatController.js';
 import { StirController } from './controllers/StirController.js';
+import { ScaleController } from './controllers/ScaleController.js';
 import { PerformanceManager } from './PerformanceManager.js';
 import { PhysicsManager } from './PhysicsManager.js';
 
@@ -349,6 +350,9 @@ export class ExperimentEngine {
                 if (modelProps.canPour === undefined) modelProps.canPour = true;
                 if (modelProps.canHeat === undefined) modelProps.canHeat = true;
                 defaultScale = 1.5;
+            } else if (lowerName.includes('scale') || lowerName.includes('electronic_scale')) {
+                if (modelProps.isScale === undefined) modelProps.isScale = true;
+                defaultScale = 1.0;
             }
             
             const finalScale = modelScale !== 1 ? modelScale : defaultScale;
@@ -483,6 +487,7 @@ export class ExperimentEngine {
                         temperature: initialTemperature,
                         contents: initialContents,
                         isContainer: modelProps.isContainer || false,
+                        isScale: lowerName.includes('scale') || lowerName.includes('electronic_scale') || modelProps.isScale || false,
                         capacity: modelProps.capacity || 0,
                         canHeat: modelProps.canHeat !== false,
                         canPour: modelProps.canPour !== false
@@ -622,6 +627,7 @@ export class ExperimentEngine {
         this.interactions.set('pour', new PourController(this));
         this.interactions.set('heat', new HeatController(this));
         this.interactions.set('stir', new StirController(this));
+        this.scaleController = new ScaleController(this);
         
         this.renderer.domElement.style.cursor = 'pointer';
         this.renderer.domElement.setAttribute('tabindex', '0'); 
