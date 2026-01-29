@@ -170,6 +170,21 @@ if ($_POST['mode'] === 'create') {
 
 } else {
 
+    $models = [];
+    if (!empty($_FILES['models']['name'][0])) {
+        foreach ($_FILES['models']['tmp_name'] as $i => $tmp) {
+            $name = basename($_FILES['models']['name'][$i]);
+            $path = "uploads/models/" . $name;
+            move_uploaded_file($tmp, $path);
+            $models[] = "/admin/" . $path;
+        }
+    } else {
+        $existingExp = $db->getExperiment($_POST['id']);
+        if ($existingExp && !empty($existingExp['models'])) {
+            $models = $existingExp['models'];
+        }
+    }
+
     $initialState = [];
     if (!empty($_POST['initialState']) && is_array($_POST['initialState'])) {
         foreach ($_POST['initialState'] as $state) {
@@ -308,7 +323,7 @@ if ($_POST['mode'] === 'create') {
         "title" => $_POST['title'],
         "subject" => $_POST['subject'],
         "class" => $_POST['class'],
-        "models" => [],
+        "models" => $models,
         "steps" => $steps,
         "initialState" => $initialState,
         "reactions" => $reactions

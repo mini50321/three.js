@@ -51,9 +51,52 @@
 
                 <div class="form-group">
                     <label>Upload GLB Models</label>
-                    <input type="file" name="models[]" multiple accept=".glb">
-                    <small style="color: #7f8c8d; font-size: 12px; margin-top: 5px; display: block;">Select one or more .glb model files</small>
+                    <input type="file" id="model-upload-input" name="models[]" multiple accept=".glb" style="margin-bottom: 10px;">
+                    <small style="color: #7f8c8d; font-size: 12px; margin-top: 5px; display: block;">Select one or more .glb model files. You can select multiple files at once (hold Ctrl/Cmd while clicking).</small>
+                    <div id="selected-models-list" style="margin-top: 10px;"></div>
                 </div>
+                <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const fileInput = document.getElementById('model-upload-input');
+                        const selectedList = document.getElementById('selected-models-list');
+                        
+                        function updateSelectedFilesDisplay() {
+                            if (fileInput.files.length === 0) {
+                                selectedList.innerHTML = '';
+                                return;
+                            }
+                            
+                            let html = '<div style="margin-top: 10px; padding: 10px; background: #e8f4f8; border-radius: 6px; border: 1px solid #b3d9e6;">';
+                            html += '<strong style="display: block; margin-bottom: 8px; color: #2c3e50;">Selected Files (' + fileInput.files.length + '):</strong>';
+                            html += '<ul style="margin: 0; padding-left: 20px; color: #2c3e50;">';
+                            
+                            for (let i = 0; i < fileInput.files.length; i++) {
+                                html += '<li style="margin-bottom: 5px; display: flex; align-items: center; gap: 10px;">';
+                                html += '<span>' + fileInput.files[i].name + '</span>';
+                                html += '<button type="button" onclick="removeFileFromSelection(' + i + ')" style="padding: 2px 8px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">Remove</button>';
+                                html += '</li>';
+                            }
+                            
+                            html += '</ul></div>';
+                            selectedList.innerHTML = html;
+                        }
+                        
+                        window.removeFileFromSelection = function(index) {
+                            const dt = new DataTransfer();
+                            for (let i = 0; i < fileInput.files.length; i++) {
+                                if (i !== index) {
+                                    dt.items.add(fileInput.files[i]);
+                                }
+                            }
+                            fileInput.files = dt.files;
+                            updateSelectedFilesDisplay();
+                        };
+                        
+                        fileInput.addEventListener('change', function() {
+                            updateSelectedFilesDisplay();
+                        });
+                    });
+                </script>
 
                 <h3>Initial State Configuration</h3>
                 <p style="color: #7f8c8d; font-size: 14px; margin-bottom: 15px;">Configure the starting properties of objects (volume, temperature, contents) when the experiment begins.</p>
