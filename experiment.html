@@ -456,6 +456,7 @@
                 <button id="start-btn">Start Experiment</button>
                 <button id="reset-btn" disabled>Reset</button>
                 <button id="validate-btn" disabled>Validate Step</button>
+                <button id="lamp-fire-btn" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);">Turn On Lamp</button>
                 <a href="../" class="btn-link">Back to Home</a>
             </div>
 
@@ -880,6 +881,20 @@
                 if (engine.isExperimentComplete()) {
                     document.getElementById('validate-btn').disabled = true;
                     showCompletionModal();
+                }
+            }
+        });
+
+        document.getElementById('lamp-fire-btn').addEventListener('click', () => {
+            if (engine) {
+                const isOn = engine.toggleSpiritLampFire();
+                const btn = document.getElementById('lamp-fire-btn');
+                if (isOn) {
+                    btn.textContent = 'Turn Off Lamp';
+                    btn.style.background = 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)';
+                } else {
+                    btn.textContent = 'Turn On Lamp';
+                    btn.style.background = 'linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)';
                 }
             }
         });

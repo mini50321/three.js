@@ -52,6 +52,10 @@ export class ExperimentEngine {
         this.updateThrottleCounter = 0;
         this.physicsEnabled = true;
         this.tableBody = null;
+        this.spiritLamp = null;
+        this.burnerStand = null;
+        this.electricBalance = null;
+        this.spiritLampFireOn = false;
         
         this.init();
     }
@@ -64,6 +68,7 @@ export class ExperimentEngine {
         this.setupLighting();
         await this.physicsManager.init();
         await this.loadTable();
+        await this.loadHardcodedModels();
         await this.loadModels();
         this.animate();
     }
@@ -177,6 +182,279 @@ export class ExperimentEngine {
             maxZ: tableConfig.depth / 2,
             y: tableConfig.y + tableConfig.height / 2
         };
+    }
+
+    async loadHardcodedModels() {
+        const loader = new GLTFLoader();
+        if (!this.tableBounds || !this.tableBounds.y) {
+            console.warn('Table bounds not available, waiting...');
+            await new Promise(resolve => setTimeout(resolve, 100));
+            if (!this.tableBounds || !this.tableBounds.y) {
+                console.error('Table bounds still not available');
+                return;
+            }
+        }
+        const tableTopY = this.tableBounds.y;
+        const tableCenterX = (this.tableBounds.minX + this.tableBounds.maxX) / 2;
+        const tableCenterZ = (this.tableBounds.minZ + this.tableBounds.maxZ) / 2;
+        const tableWidth = this.tableBounds.maxX - this.tableBounds.minX;
+        const tableDepth = this.tableBounds.maxZ - this.tableBounds.minZ;
+        
+        try {
+            const balanceGltf = await loader.loadAsync('assets/models/electronic_scale.glb');
+            const balance = balanceGltf.scene;
+            balance.scale.set(1.0, 1.0, 1.0);
+            
+            const shadowsEnabled = this.performanceManager.getShadowsEnabled();
+            balance.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = shadowsEnabled;
+                    child.receiveShadow = shadowsEnabled;
+                }
+            });
+            
+            balance.position.set(0, 0, 0);
+            balance.updateMatrixWorld(true);
+            
+            const balanceBox = new THREE.Box3().setFromObject(balance);
+            const balanceMinY = balanceBox.min.y;
+            const balanceSize = balanceBox.getSize(new THREE.Vector3());
+            const balanceRadius = Math.max(balanceSize.x, balanceSize.z) / 2;
+            
+            const balanceX = Math.max(this.tableBounds.minX + balanceRadius + 0.1, 
+                                     Math.min(this.tableBounds.maxX - balanceRadius - 0.1, 
+                                             tableCenterX - tableWidth * 0.25));
+            const balanceZ = tableCenterZ;
+            
+            balance.position.set(balanceX, tableTopY - balanceMinY, balanceZ);
+            balance.updateMatrixWorld(true);
+            
+            balance.userData.isHardcoded = true;
+            this.electricBalance = balance;
+            this.scene.add(balance);
+            
+            const balanceData = {
+                mesh: balance,
+                name: 'Electric Balance',
+                originalPosition: balance.position.clone(),
+                originalRotation: balance.rotation.clone(),
+                originalScale: balance.scale.clone(),
+                boundingBox: balanceBox,
+                size: balanceSize,
+                center: balanceBox.getCenter(new THREE.Vector3()),
+                centerOffset: new THREE.Vector3(0, 0, 0),
+                properties: {
+                    isScale: true,
+                    volume: 0,
+                    mass: 1,
+                    temperature: 20,
+                    contents: []
+                },
+                interactions: {
+                    draggable: true,
+                    tiltable: false,
+                    heatable: false,
+                    canPour: false
+                },
+                physicsBody: null
+            };
+            this.objects.set('Electric Balance', balanceData);
+        } catch (error) {
+            console.warn('Failed to load electric balance:', error);
+        }
+        
+        try {
+            const lampGltf = await loader.loadAsync('assets/models/Spirit Lamp .glb');
+            const spiritLamp = lampGltf.scene;
+            spiritLamp.scale.set(0.2, 0.2, 0.2);
+            
+            const shadowsEnabled = this.performanceManager.getShadowsEnabled();
+            spiritLamp.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = shadowsEnabled;
+                    child.receiveShadow = shadowsEnabled;
+                }
+            });
+            
+            spiritLamp.position.set(0, 0, 0);
+            spiritLamp.updateMatrixWorld(true);
+            
+            const lampBox = new THREE.Box3().setFromObject(spiritLamp);
+            const lampMinY = lampBox.min.y;
+            const lampSize = lampBox.getSize(new THREE.Vector3());
+            const lampRadius = Math.max(lampSize.x, lampSize.z) / 2;
+            
+            const lampX = Math.max(this.tableBounds.minX + lampRadius + 0.1, 
+                                   Math.min(this.tableBounds.maxX - lampRadius - 0.1, 
+                                           tableCenterX + tableWidth * 0.25));
+            const lampZ = tableCenterZ;
+            
+            spiritLamp.position.set(lampX, tableTopY - lampMinY, lampZ);
+            spiritLamp.updateMatrixWorld(true);
+            
+            const lampBoxFinal = new THREE.Box3().setFromObject(spiritLamp);
+            const lampTopY = lampBoxFinal.max.y;
+            
+            spiritLamp.userData.isHardcoded = true;
+            this.spiritLamp = spiritLamp;
+            this.scene.add(spiritLamp);
+            
+            const lampData = {
+                mesh: spiritLamp,
+                name: 'Spirit Lamp',
+                originalPosition: spiritLamp.position.clone(),
+                originalRotation: spiritLamp.rotation.clone(),
+                originalScale: spiritLamp.scale.clone(),
+                boundingBox: lampBoxFinal,
+                size: lampBoxFinal.getSize(new THREE.Vector3()),
+                center: lampBoxFinal.getCenter(new THREE.Vector3()),
+                centerOffset: new THREE.Vector3(0, 0, 0),
+                properties: {
+                    canHeat: true,
+                    volume: 0,
+                    mass: 1,
+                    temperature: 20,
+                    contents: []
+                },
+                interactions: {
+                    draggable: true,
+                    tiltable: false,
+                    heatable: false,
+                    canPour: false
+                },
+                physicsBody: null
+            };
+            this.objects.set('Spirit Lamp', lampData);
+            
+            const burnerGltf = await loader.loadAsync('assets/models/Burner Stand.glb');
+            const burnerStand = burnerGltf.scene;
+            burnerStand.scale.set(1.0, 1.0, 1.0);
+            
+            burnerStand.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = shadowsEnabled;
+                    child.receiveShadow = shadowsEnabled;
+                }
+            });
+            
+            burnerStand.position.set(0, 0, 0);
+            burnerStand.updateMatrixWorld(true);
+            
+            const burnerBox = new THREE.Box3().setFromObject(burnerStand);
+            const burnerMinY = burnerBox.min.y;
+            const burnerSize = burnerBox.getSize(new THREE.Vector3());
+            const burnerRadius = Math.max(burnerSize.x, burnerSize.z) / 2;
+            
+            const burnerX = Math.max(this.tableBounds.minX + burnerRadius + 0.1, 
+                                    Math.min(this.tableBounds.maxX - burnerRadius - 0.1, lampX));
+            const burnerZ = lampZ;
+            
+            burnerStand.position.set(burnerX, lampTopY - burnerMinY, burnerZ);
+            burnerStand.updateMatrixWorld(true);
+            
+            burnerStand.userData.isHardcoded = true;
+            this.burnerStand = burnerStand;
+            this.scene.add(burnerStand);
+            
+            const burnerData = {
+                mesh: burnerStand,
+                name: 'Burner Stand',
+                originalPosition: burnerStand.position.clone(),
+                originalRotation: burnerStand.rotation.clone(),
+                originalScale: burnerStand.scale.clone(),
+                boundingBox: burnerBox,
+                size: burnerBox.getSize(new THREE.Vector3()),
+                center: burnerBox.getCenter(new THREE.Vector3()),
+                centerOffset: new THREE.Vector3(0, 0, 0),
+                properties: {
+                    volume: 0,
+                    mass: 1,
+                    temperature: 20,
+                    contents: []
+                },
+                interactions: {
+                    draggable: true,
+                    tiltable: false,
+                    heatable: false,
+                    canPour: false
+                },
+                physicsBody: null
+            };
+            this.objects.set('Burner Stand', burnerData);
+        } catch (error) {
+            console.warn('Failed to load burner stand or spirit lamp:', error);
+        }
+    }
+
+    toggleSpiritLampFire() {
+        this.spiritLampFireOn = !this.spiritLampFireOn;
+        
+        if (this.spiritLampFireOn) {
+            if (this.spiritLamp) {
+                const lampBox = new THREE.Box3().setFromObject(this.spiritLamp);
+                const lampTopY = lampBox.max.y;
+                const lampCenter = lampBox.getCenter(new THREE.Vector3());
+                
+                const fireEffect = {
+                    type: 'fire',
+                    particles: [],
+                    active: true,
+                    flickerTime: 0
+                };
+                
+                const fireColors = [0xff4400, 0xff6600, 0xff8800, 0xffaa00, 0xffff00];
+                const particleCount = 20;
+                
+                for (let i = 0; i < particleCount; i++) {
+                    const color = fireColors[Math.floor(Math.random() * fireColors.length)];
+                    const size = 0.02 + Math.random() * 0.03;
+                    
+                    const particle = new THREE.Mesh(
+                        new THREE.SphereGeometry(size, 8, 8),
+                        new THREE.MeshBasicMaterial({ 
+                            color: color, 
+                            transparent: true, 
+                            opacity: 0.8 + Math.random() * 0.2 
+                        })
+                    );
+                    
+                    particle.position.set(
+                        lampCenter.x + (Math.random() - 0.5) * 0.1,
+                        lampTopY + Math.random() * 0.15,
+                        lampCenter.z + (Math.random() - 0.5) * 0.1
+                    );
+                    
+                    particle.velocity = new THREE.Vector3(
+                        (Math.random() - 0.5) * 0.05,
+                        Math.random() * 0.1 + 0.05,
+                        (Math.random() - 0.5) * 0.05
+                    );
+                    
+                    particle.userData.baseY = particle.position.y;
+                    particle.userData.flickerSpeed = 0.5 + Math.random() * 0.5;
+                    particle.userData.flickerAmount = 0.03 + Math.random() * 0.02;
+                    particle.userData.life = 1.0;
+                    particle.userData.decayRate = 0.01 + Math.random() * 0.01;
+                    
+                    this.scene.add(particle);
+                    fireEffect.particles.push(particle);
+                }
+                
+                this.effects.set('spiritLamp_fire', fireEffect);
+            }
+        } else {
+            const fireEffect = this.effects.get('spiritLamp_fire');
+            if (fireEffect) {
+                fireEffect.particles.forEach(particle => {
+                    this.scene.remove(particle);
+                    particle.geometry.dispose();
+                    particle.material.dispose();
+                });
+                this.effects.delete('spiritLamp_fire');
+            }
+        }
+        
+        return this.spiritLampFireOn;
     }
 
     setupCamera() {
@@ -610,10 +888,11 @@ export class ExperimentEngine {
     storeInitialState() {
         this.initialState = new Map();
         for (const [name, obj] of this.objects) {
+            const contents = Array.isArray(obj.properties.contents) ? obj.properties.contents : [];
             this.initialState.set(name, {
-                volume: obj.properties.volume,
-                temperature: obj.properties.temperature,
-                contents: [...obj.properties.contents],
+                volume: obj.properties.volume || 0,
+                temperature: obj.properties.temperature || 20,
+                contents: [...contents],
                 position: obj.mesh.position.clone(),
                 rotation: obj.mesh.rotation.clone(),
                 scale: obj.mesh.scale.clone()
@@ -1309,19 +1588,35 @@ export class ExperimentEngine {
                     particle.scale.set(sizeScale, sizeScale, sizeScale);
                     
                     if (particle.userData.life <= 0 || particle.material.opacity < 0.01) {
-                        const obj = this.findObjectByFireKey(key);
-                        if (obj) {
-                            const box = obj.boundingBox;
-                            const sizeVec = box.getSize(new THREE.Vector3());
-                            const minY = box.min.y;
+                        if (key === 'spiritLamp_fire' && this.spiritLamp) {
+                            const lampBox = new THREE.Box3().setFromObject(this.spiritLamp);
+                            const lampTopY = lampBox.max.y;
+                            const lampCenter = lampBox.getCenter(new THREE.Vector3());
                             
-                            particle.position.copy(obj.mesh.position);
-                            particle.position.y = minY + sizeVec.y * 0.3 + Math.random() * sizeVec.y * 0.4;
-                            particle.position.x += (Math.random() - 0.5) * sizeVec.x * 0.6;
-                            particle.position.z += (Math.random() - 0.5) * sizeVec.z * 0.6;
+                            particle.position.set(
+                                lampCenter.x + (Math.random() - 0.5) * 0.1,
+                                lampTopY + Math.random() * 0.15,
+                                lampCenter.z + (Math.random() - 0.5) * 0.1
+                            );
                             
+                            particle.userData.baseY = particle.position.y;
                             particle.userData.life = 1.0;
                             particle.material.opacity = 0.8 + Math.random() * 0.2;
+                        } else {
+                            const obj = this.findObjectByFireKey(key);
+                            if (obj) {
+                                const box = obj.boundingBox;
+                                const sizeVec = box.getSize(new THREE.Vector3());
+                                const minY = box.min.y;
+                                
+                                particle.position.copy(obj.mesh.position);
+                                particle.position.y = minY + sizeVec.y * 0.3 + Math.random() * sizeVec.y * 0.4;
+                                particle.position.x += (Math.random() - 0.5) * sizeVec.x * 0.6;
+                                particle.position.z += (Math.random() - 0.5) * sizeVec.z * 0.6;
+                                
+                                particle.userData.life = 1.0;
+                                particle.material.opacity = 0.8 + Math.random() * 0.2;
+                            }
                         }
                     }
                 });
@@ -1741,12 +2036,32 @@ export class ExperimentEngine {
                 }
             });
         }
+        if (this.electricBalance) {
+            this.electricBalance.traverse((child) => {
+                if (child.isMesh) {
+                    allMeshes.push(child);
+                }
+            });
+        }
+        if (this.spiritLamp) {
+            this.spiritLamp.traverse((child) => {
+                if (child.isMesh) {
+                    allMeshes.push(child);
+                }
+            });
+        }
+        if (this.burnerStand) {
+            this.burnerStand.traverse((child) => {
+                if (child.isMesh) {
+                    allMeshes.push(child);
+                }
+            });
+        }
         const intersects = this.raycaster.intersectObjects(allMeshes, true);
         
         if (intersects.length > 0) {
             const clickedObject = this.findObjectByMesh(intersects[0].object);
             if (clickedObject) {
-               
                 event.preventDefault();
                 event.stopPropagation();
                 this.handleInteractionStart(clickedObject, event);
@@ -1809,6 +2124,31 @@ export class ExperimentEngine {
             });
             if (found) return obj;
         }
+        
+        if (this.electricBalance) {
+            let found = false;
+            this.electricBalance.traverse((child) => {
+                if (child === mesh) found = true;
+            });
+            if (found) return this.objects.get('Electric Balance');
+        }
+        
+        if (this.spiritLamp) {
+            let found = false;
+            this.spiritLamp.traverse((child) => {
+                if (child === mesh) found = true;
+            });
+            if (found) return this.objects.get('Spirit Lamp');
+        }
+        
+        if (this.burnerStand) {
+            let found = false;
+            this.burnerStand.traverse((child) => {
+                if (child === mesh) found = true;
+            });
+            if (found) return this.objects.get('Burner Stand');
+        }
+        
         return null;
     }
 
