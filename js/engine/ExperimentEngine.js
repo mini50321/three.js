@@ -56,6 +56,7 @@ export class ExperimentEngine {
         this.burnerStand = null;
         this.electricBalance = null;
         this.spiritLampFireOn = false;
+        this.spiritLampFire = null;
         
         this.init();
     }
@@ -226,7 +227,13 @@ export class ExperimentEngine {
                                              tableCenterX - tableWidth * 0.25));
             const balanceZ = tableCenterZ;
             
-            balance.position.set(balanceX, tableTopY - balanceMinY, balanceZ);
+            balance.position.set(balanceX, 0, balanceZ);
+            balance.updateMatrixWorld(true);
+            
+            const balanceBoxPositioned = new THREE.Box3().setFromObject(balance);
+            const balanceMinYPositioned = balanceBoxPositioned.min.y;
+            const offsetY = tableTopY - balanceMinYPositioned;
+            balance.position.y = offsetY;
             balance.updateMatrixWorld(true);
             
             balance.userData.isHardcoded = true;
@@ -280,7 +287,6 @@ export class ExperimentEngine {
             spiritLamp.updateMatrixWorld(true);
             
             const lampBox = new THREE.Box3().setFromObject(spiritLamp);
-            const lampMinY = lampBox.min.y;
             const lampSize = lampBox.getSize(new THREE.Vector3());
             const lampRadius = Math.max(lampSize.x, lampSize.z) / 2;
             
@@ -289,7 +295,13 @@ export class ExperimentEngine {
                                            tableCenterX + tableWidth * 0.25));
             const lampZ = tableCenterZ;
             
-            spiritLamp.position.set(lampX, tableTopY - lampMinY, lampZ);
+            spiritLamp.position.set(lampX, 0, lampZ);
+            spiritLamp.updateMatrixWorld(true);
+            
+            const lampBoxPositioned = new THREE.Box3().setFromObject(spiritLamp);
+            const lampMinYPositioned = lampBoxPositioned.min.y;
+            const lampOffsetY = tableTopY - lampMinYPositioned;
+            spiritLamp.position.y = lampOffsetY;
             spiritLamp.updateMatrixWorld(true);
             
             const lampBoxFinal = new THREE.Box3().setFromObject(spiritLamp);
@@ -341,7 +353,6 @@ export class ExperimentEngine {
             burnerStand.updateMatrixWorld(true);
             
             const burnerBox = new THREE.Box3().setFromObject(burnerStand);
-            const burnerMinY = burnerBox.min.y;
             const burnerSize = burnerBox.getSize(new THREE.Vector3());
             const burnerRadius = Math.max(burnerSize.x, burnerSize.z) / 2;
             
@@ -349,8 +360,16 @@ export class ExperimentEngine {
                                     Math.min(this.tableBounds.maxX - burnerRadius - 0.1, lampX));
             const burnerZ = lampZ;
             
-            burnerStand.position.set(burnerX, lampTopY - burnerMinY, burnerZ);
+            burnerStand.position.set(burnerX, 0, burnerZ);
             burnerStand.updateMatrixWorld(true);
+            
+            const burnerBoxPositioned = new THREE.Box3().setFromObject(burnerStand);
+            const burnerMinYPositioned = burnerBoxPositioned.min.y;
+            const burnerOffsetY = lampTopY - burnerMinYPositioned;
+            burnerStand.position.y = burnerOffsetY;
+            burnerStand.updateMatrixWorld(true);
+            
+            const burnerBoxFinal = new THREE.Box3().setFromObject(burnerStand);
             
             burnerStand.userData.isHardcoded = true;
             this.burnerStand = burnerStand;
@@ -386,76 +405,85 @@ export class ExperimentEngine {
         }
     }
 
-    toggleSpiritLampFire() {
+    async toggleSpiritLampFire() {
         this.spiritLampFireOn = !this.spiritLampFireOn;
         
         if (this.spiritLampFireOn) {
-            if (this.spiritLamp) {
-                const lampBox = new THREE.Box3().setFromObject(this.spiritLamp);
-                const lampTopY = lampBox.max.y;
-                const lampCenter = lampBox.getCenter(new THREE.Vector3());
-                
-                const fireEffect = {
-                    type: 'fire',
-                    particles: [],
-                    active: true,
-                    flickerTime: 0
-                };
-                
-                const fireColors = [0xff4400, 0xff6600, 0xff8800, 0xffaa00, 0xffff00];
-                const particleCount = 20;
-                
-                for (let i = 0; i < particleCount; i++) {
-                    const color = fireColors[Math.floor(Math.random() * fireColors.length)];
-                    const size = 0.02 + Math.random() * 0.03;
+            if (this.spiritLamp && !this.spiritLampFire) {
+                try {
+                    if (!this.FireShader) {
+                        const fireShaderModule = await import('./FireShader.js');
+                        if (fireShaderModule.default) {
+                            this.FireShader = fireShaderModule.default(THREE);
+                        }
+                    }
                     
-                    const particle = new THREE.Mesh(
-                        new THREE.SphereGeometry(size, 8, 8),
-                        new THREE.MeshBasicMaterial({ 
-                            color: color, 
-                            transparent: true, 
-                            opacity: 0.8 + Math.random() * 0.2 
-                        })
-                    );
+                    if (!this.Fire) {
+                        const fireModule = await import('./Fire.js');
+                        if (fireModule.default && this.FireShader) {
+                            this.Fire = fireModule.default(THREE, this.FireShader);
+                        }
+                    }
                     
-                    particle.position.set(
-                        lampCenter.x + (Math.random() - 0.5) * 0.1,
-                        lampTopY + Math.random() * 0.15,
-                        lampCenter.z + (Math.random() - 0.5) * 0.1
-                    );
-                    
-                    particle.velocity = new THREE.Vector3(
-                        (Math.random() - 0.5) * 0.05,
-                        Math.random() * 0.1 + 0.05,
-                        (Math.random() - 0.5) * 0.05
-                    );
-                    
-                    particle.userData.baseY = particle.position.y;
-                    particle.userData.flickerSpeed = 0.5 + Math.random() * 0.5;
-                    particle.userData.flickerAmount = 0.03 + Math.random() * 0.02;
-                    particle.userData.life = 1.0;
-                    particle.userData.decayRate = 0.01 + Math.random() * 0.01;
-                    
-                    this.scene.add(particle);
-                    fireEffect.particles.push(particle);
+                    if (this.Fire && this.FireShader) {
+                        const lampBox = new THREE.Box3().setFromObject(this.spiritLamp);
+                        const lampTopY = lampBox.max.y;
+                        const lampCenter = lampBox.getCenter(new THREE.Vector3());
+                        
+                        const textureLoader = new THREE.TextureLoader();
+                        const fireTexture = textureLoader.load('./THREE.Fire/Fire.png');
+                        fireTexture.needsUpdate = true;
+                        
+                        const fire = new this.Fire(fireTexture, new THREE.Color(0xeeeeee));
+                        fire.scale.set(0.15, 0.3, 0.15);
+                        fire.position.set(lampCenter.x, lampTopY, lampCenter.z);
+                        
+                        this.scene.add(fire);
+                        this.spiritLampFire = fire;
+                        
+                        this.effects.set('spiritLamp_fire', {
+                            type: 'threefire',
+                            fire: fire,
+                            active: true
+                        });
+                    } else {
+                        throw new Error('Fire or FireShader not available');
+                    }
+                } catch (error) {
+                    console.error('Failed to load Fire library:', error);
                 }
-                
-                this.effects.set('spiritLamp_fire', fireEffect);
             }
         } else {
-            const fireEffect = this.effects.get('spiritLamp_fire');
-            if (fireEffect) {
-                fireEffect.particles.forEach(particle => {
-                    this.scene.remove(particle);
-                    particle.geometry.dispose();
-                    particle.material.dispose();
-                });
+            if (this.spiritLampFire) {
+                this.scene.remove(this.spiritLampFire);
+                if (this.spiritLampFire.dispose && typeof this.spiritLampFire.dispose === 'function') {
+                    this.spiritLampFire.dispose();
+                } else {
+                    if (this.spiritLampFire.geometry) {
+                        this.spiritLampFire.geometry.dispose();
+                    }
+                    if (this.spiritLampFire.material) {
+                        if (Array.isArray(this.spiritLampFire.material)) {
+                            this.spiritLampFire.material.forEach(mat => {
+                                if (mat.map) mat.map.dispose();
+                                mat.dispose();
+                            });
+                        } else {
+                            if (this.spiritLampFire.material.map) {
+                                this.spiritLampFire.material.map.dispose();
+                            }
+                            this.spiritLampFire.material.dispose();
+                        }
+                    }
+                }
+                this.spiritLampFire = null;
                 this.effects.delete('spiritLamp_fire');
             }
         }
         
         return this.spiritLampFireOn;
     }
+
 
     setupCamera() {
         const width = this.container.clientWidth;
@@ -1571,6 +1599,19 @@ export class ExperimentEngine {
     updateParticles() {
         for (const [key, effect] of this.effects) {
             if (!effect.active) continue;
+            
+            if (effect.type === 'threefire' && effect.fire) {
+                if (this.spiritLamp) {
+                    const lampBox = new THREE.Box3().setFromObject(this.spiritLamp);
+                    const lampTopY = lampBox.max.y;
+                    const lampCenter = lampBox.getCenter(new THREE.Vector3());
+                    effect.fire.position.set(lampCenter.x, lampTopY, lampCenter.z);
+                }
+                if (effect.fire.update && typeof effect.fire.update === 'function') {
+                    effect.fire.update(Date.now() * 0.001);
+                }
+                continue;
+            }
             
             if (effect.type === 'fire') {
                 effect.flickerTime += 0.1;
