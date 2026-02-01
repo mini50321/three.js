@@ -69,8 +69,6 @@ export class ExperimentEngine {
         this.setupLighting();
         await this.physicsManager.init();
         await this.loadTable();
-        await this.loadHardcodedModels();
-        await this.loadModels();
         this.animate();
     }
 
@@ -429,23 +427,33 @@ export class ExperimentEngine {
                         const lampBox = new THREE.Box3().setFromObject(this.spiritLamp);
                         const lampTopY = lampBox.max.y;
                         const lampCenter = lampBox.getCenter(new THREE.Vector3());
+                        const lampSize = lampBox.getSize(new THREE.Vector3());
                         
                         const textureLoader = new THREE.TextureLoader();
-                        const fireTexture = textureLoader.load('./THREE.Fire/Fire.png');
-                        fireTexture.needsUpdate = true;
-                        
-                        const fire = new this.Fire(fireTexture, new THREE.Color(0xeeeeee));
-                        fire.scale.set(0.15, 0.3, 0.15);
-                        fire.position.set(lampCenter.x, lampTopY, lampCenter.z);
-                        
-                        this.scene.add(fire);
-                        this.spiritLampFire = fire;
-                        
-                        this.effects.set('spiritLamp_fire', {
-                            type: 'threefire',
-                            fire: fire,
-                            active: true
-                        });
+                        const fireTexture = textureLoader.load(
+                            './THREE.Fire/Fire.png',
+                            (texture) => {
+                                texture.needsUpdate = true;
+                                
+                                const fire = new this.Fire(texture, new THREE.Color(0xffaa44));
+                                fire.scale.set(0.15, 0.4, 0.15);
+                                const fireOffset = 0.2;
+                                fire.position.set(lampCenter.x, lampTopY + fireOffset, lampCenter.z);
+                                
+                                this.scene.add(fire);
+                                this.spiritLampFire = fire;
+                                
+                                this.effects.set('spiritLamp_fire', {
+                                    type: 'threefire',
+                                    fire: fire,
+                                    active: true
+                                });
+                            },
+                            undefined,
+                            (error) => {
+                                console.error('Failed to load Fire.png texture:', error);
+                            }
+                        );
                     } else {
                         throw new Error('Fire or FireShader not available');
                     }
@@ -508,9 +516,9 @@ export class ExperimentEngine {
         this.renderer.shadowMap.type = quality.shadowMapType;
         this.renderer.sortObjects = false;
         
-        // Ensure canvas can receive all events including wheel for zoom
         this.renderer.domElement.style.touchAction = 'none';
         this.renderer.domElement.style.userSelect = 'none';
+        this.renderer.domElement.style.pointerEvents = 'auto';
         
         this.container.appendChild(this.renderer.domElement);
 
@@ -524,7 +532,7 @@ export class ExperimentEngine {
         this.controls.minDistance = 2;
         this.controls.maxDistance = 20;
         this.controls.enablePan = true;
-        this.controls.enableZoom = false;
+        this.controls.enableZoom = true;
         this.controls.enableRotate = true;
         this.controls.zoomSpeed = 0.05;
         this.controls.enabled = true;
@@ -945,6 +953,9 @@ export class ExperimentEngine {
         });
         
         this.renderer.domElement.addEventListener('mousedown', (e) => {
+            if (this.isDraggingLabware) {
+                return;
+            }
             if (e.button === 0) {
                 this.onMouseDown(e);
             }
@@ -973,6 +984,306 @@ export class ExperimentEngine {
         window.addEventListener('keyup', (e) => this.onKeyUp(e));
     }
 
+    getWorldPositionFromMouse(event) {
+        if (!this.renderer || !this.renderer.domElement) {
+            console.error('Renderer or domElement not available');
+            return this.tableBounds ? new THREE.Vector3(0, this.tableBounds.y, 0) : new THREE.Vector3(0, 0, 0);
+        }
+        
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        const mouse = new THREE.Vector2();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        
+        this.raycaster.setFromCamera(mouse, this.camera);
+        
+        if (this.tableSurface) {
+            const intersects = this.raycaster.intersectObject(this.tableSurface, true);
+            if (intersects.length > 0) {
+                return intersects[0].point;
+            }
+        }
+        
+        const tableTopY = this.tableBounds ? this.tableBounds.y : 0;
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), tableTopY);
+        const intersectPoint = new THREE.Vector3();
+        const didIntersect = this.raycaster.ray.intersectPlane(plane, intersectPoint);
+        
+        if (didIntersect) {
+            return intersectPoint;
+        }
+        
+        const centerX = this.tableBounds ? (this.tableBounds.minX + this.tableBounds.maxX) / 2 : 0;
+        const centerZ = this.tableBounds ? (this.tableBounds.minZ + this.tableBounds.maxZ) / 2 : 0;
+        return new THREE.Vector3(centerX, tableTopY, centerZ);
+    }
+
+    async addLabware(modelPath, modelName = null, position = null) {
+        console.log('addLabware called with:', { modelPath, modelName, position });
+        const loader = new GLTFLoader();
+        const name = modelName || this.extractModelName(modelPath);
+        const lowerName = name.toLowerCase();
+        
+        if (this.objects.has(name)) {
+            console.warn(`Labware ${name} already exists in scene`);
+            return;
+        }
+        
+        if (lowerName.includes('table') || lowerName.includes('laboratory') || 
+            lowerName.includes('spirit') || lowerName.includes('burner') || 
+            lowerName.includes('electronic') || lowerName.includes('scale')) {
+            console.warn(`Cannot add ${name} as labware`);
+            return;
+        }
+        
+        try {
+            console.log('Loading model from path:', modelPath);
+            const gltf = await loader.loadAsync(modelPath);
+            console.log('Model loaded successfully:', gltf);
+            
+            if (!gltf || !gltf.scene) {
+                throw new Error('Invalid GLTF file: scene is missing');
+            }
+            const model = gltf.scene.clone();
+            
+            let defaultScale = 1;
+            let modelProps = {};
+            
+            if (lowerName.includes('beaker') || lowerName.includes('flask') || lowerName.includes('bottle')) {
+                modelProps.isContainer = true;
+                modelProps.capacity = 1000;
+                modelProps.canPour = true;
+                modelProps.canHeat = true;
+                defaultScale = 2.5;
+            } else if (lowerName.includes('conical')) {
+                modelProps.isContainer = true;
+                modelProps.capacity = 1000;
+                modelProps.canPour = true;
+                modelProps.canHeat = true;
+                defaultScale = 1.5;
+            } else if (lowerName.includes('test') || lowerName.includes('tube')) {
+                modelProps.isContainer = true;
+                modelProps.capacity = 50;
+                modelProps.canPour = true;
+                modelProps.canHeat = true;
+                defaultScale = 2.0;
+            } else if (lowerName.includes('cylinder') || lowerName.includes('graduated')) {
+                modelProps.isContainer = true;
+                modelProps.capacity = 500;
+                modelProps.canPour = true;
+                modelProps.canHeat = false;
+                defaultScale = 2.0;
+            }
+            
+            model.scale.set(defaultScale, defaultScale, defaultScale);
+            
+            const box = new THREE.Box3().setFromObject(model);
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+            const minY = box.min.y;
+            
+            const shadowsEnabled = this.performanceManager.getShadowsEnabled();
+            model.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = shadowsEnabled;
+                    child.receiveShadow = shadowsEnabled;
+                }
+            });
+            
+            const tableTopY = this.tableBounds ? this.tableBounds.y : 0;
+            const objectSize = box.getSize(new THREE.Vector3());
+            const objectRadius = Math.max(objectSize.x, objectSize.z) / 2;
+            
+            let initialPosition;
+            if (position) {
+                initialPosition = position.clone();
+            } else if (this.tableBounds) {
+                const tableCenterX = (this.tableBounds.minX + this.tableBounds.maxX) / 2;
+                const tableCenterZ = (this.tableBounds.minZ + this.tableBounds.maxZ) / 2;
+                
+                let minSpacing = objectRadius * 4;
+                if (this.objects.size > 0) {
+                    for (const [existingName, existingObj] of this.objects) {
+                        existingObj.mesh.updateMatrixWorld(true);
+                        const existingBox = new THREE.Box3().setFromObject(existingObj.mesh);
+                        const existingSize = existingBox.getSize(new THREE.Vector3());
+                        const existingRadius = Math.max(existingSize.x, existingSize.z) / 2;
+                        minSpacing = Math.max(minSpacing, objectRadius + existingRadius + 0.3);
+                    }
+                }
+                
+                const posX = tableCenterX;
+                const posZ = tableCenterZ;
+                
+                initialPosition = new THREE.Vector3(
+                    Math.max(this.tableBounds.minX + objectRadius + 0.3, Math.min(this.tableBounds.maxX - objectRadius - 0.3, posX)),
+                    0,
+                    Math.max(this.tableBounds.minZ + objectRadius + 0.3, Math.min(this.tableBounds.maxZ - objectRadius - 0.3, posZ))
+                );
+            } else {
+                initialPosition = new THREE.Vector3(0, 0, 0);
+            }
+            
+            if (position) {
+                const objectSize = box.getSize(new THREE.Vector3());
+                const objectRadius = Math.max(objectSize.x, objectSize.z) / 2;
+                model.position.set(position.x, position.y || 0, position.z);
+                if (this.tableBounds) {
+                    model.position.x = Math.max(this.tableBounds.minX + objectRadius + 0.1, 
+                                               Math.min(this.tableBounds.maxX - objectRadius - 0.1, model.position.x));
+                    model.position.z = Math.max(this.tableBounds.minZ + objectRadius + 0.1, 
+                                               Math.min(this.tableBounds.maxZ - objectRadius - 0.1, model.position.z));
+                }
+            } else {
+                model.position.copy(initialPosition);
+            }
+            
+            model.updateMatrixWorld(true);
+            
+            let attempts = 0;
+            let boxPositioned = new THREE.Box3().setFromObject(model);
+            let minYPositioned = boxPositioned.min.y;
+            
+            while (Math.abs(minYPositioned - tableTopY) > 0.001 && attempts < 20) {
+                const correction = tableTopY - minYPositioned;
+                model.position.y += correction;
+                model.updateMatrixWorld(true);
+                boxPositioned = new THREE.Box3().setFromObject(model);
+                minYPositioned = boxPositioned.min.y;
+                attempts++;
+            }
+            
+            const centerFinal = boxPositioned.getCenter(new THREE.Vector3());
+            const centerOffset = new THREE.Vector3().subVectors(centerFinal, model.position);
+            
+            const objectData = {
+                mesh: model,
+                name: name,
+                originalPosition: initialPosition.clone(),
+                originalRotation: model.rotation.clone(),
+                originalScale: model.scale.clone(),
+                boundingBox: box,
+                size: size,
+                center: center,
+                centerOffset: centerOffset,
+                properties: {
+                    volume: 0,
+                    mass: 1,
+                    temperature: 20,
+                    contents: [],
+                    isContainer: modelProps.isContainer || false,
+                    isScale: false,
+                    capacity: modelProps.capacity || 0,
+                    canHeat: modelProps.canHeat !== false,
+                    canPour: modelProps.canPour !== false
+                },
+                interactions: {
+                    draggable: true,
+                    tiltable: modelProps.canPour !== false,
+                    heatable: modelProps.canHeat !== false,
+                    canPour: modelProps.canPour !== false
+                },
+                initialState: {
+                    volume: 0,
+                    temperature: 20,
+                    contents: []
+                },
+                physicsBody: null
+            };
+            
+            if (this.physicsManager && this.physicsManager.world) {
+                const mass = objectData.properties.mass || 1;
+                let body = null;
+                
+                if (lowerName.includes('beaker') || lowerName.includes('conical') || lowerName.includes('flask') || lowerName.includes('cylinder')) {
+                    body = this.physicsManager.createCylinderBody(model, mass);
+                } else if (lowerName.includes('sphere') || lowerName.includes('ball')) {
+                    body = this.physicsManager.createSphereBody(model, mass);
+                } else {
+                    body = this.physicsManager.createBoxBody(model, mass);
+                }
+                
+                if (body) {
+                    model.updateMatrixWorld(true);
+                    const boxWorld = new THREE.Box3().setFromObject(model);
+                    const centerWorld = boxWorld.getCenter(new THREE.Vector3());
+                    body.position.set(centerWorld.x, centerWorld.y, centerWorld.z);
+                    this.physicsManager.addBody(name, body);
+                    objectData.physicsBody = body;
+                }
+            }
+            
+            this.objects.set(name, objectData);
+            this.scene.add(model);
+            console.log(`Labware ${name} added to scene at position:`, model.position, 'scale:', model.scale);
+            console.log(`Total objects in scene: ${this.objects.size}`);
+            console.log(`Model visible:`, model.visible);
+            console.log(`Model in scene:`, this.scene.children.includes(model));
+            
+            if (this.initialState) {
+                this.initialState.set(name, {
+                    volume: 0,
+                    temperature: 20,
+                    contents: [],
+                    position: model.position.clone(),
+                    rotation: model.rotation.clone(),
+                    scale: model.scale.clone()
+                });
+            }
+        } catch (error) {
+            console.error(`Failed to load labware ${name}:`, error);
+            console.error('Error details:', error.message, error.stack);
+        }
+    }
+
+    removeLabware(name) {
+        const obj = this.objects.get(name);
+        if (!obj) {
+            console.warn(`Labware ${name} not found`);
+            return;
+        }
+        
+        const lowerName = name.toLowerCase();
+        if (lowerName.includes('spirit') || lowerName.includes('burner') || 
+            lowerName.includes('electronic') || lowerName.includes('scale')) {
+            console.warn(`Cannot remove ${name}`);
+            return;
+        }
+        
+        if (obj.mesh) {
+            this.scene.remove(obj.mesh);
+            if (obj.mesh.geometry) obj.mesh.geometry.dispose();
+            if (obj.mesh.material) {
+                if (Array.isArray(obj.mesh.material)) {
+                    obj.mesh.material.forEach(mat => {
+                        if (mat.map) mat.map.dispose();
+                        mat.dispose();
+                    });
+                } else {
+                    if (obj.mesh.material.map) obj.mesh.material.map.dispose();
+                    obj.mesh.material.dispose();
+                }
+            }
+        }
+        
+        if (obj.physicsBody && this.physicsManager) {
+            this.physicsManager.removeBody(name);
+        }
+        
+        if (this.liquidMeshes.has(name)) {
+            const liquidMesh = this.liquidMeshes.get(name);
+            this.scene.remove(liquidMesh);
+            if (liquidMesh.geometry) liquidMesh.geometry.dispose();
+            if (liquidMesh.material) liquidMesh.material.dispose();
+            this.liquidMeshes.delete(name);
+        }
+        
+        this.objects.delete(name);
+        if (this.initialState) {
+            this.initialState.delete(name);
+        }
+    }
+
     extractModelName(path) {
         const parts = path.split('/');
         const filename = parts[parts.length - 1];
@@ -992,6 +1303,10 @@ export class ExperimentEngine {
         const currentTime = performance.now();
         const deltaTime = currentTime - this.lastFrameTime;
         this.lastFrameTime = currentTime;
+        
+        if (!this.startTime) {
+            this.startTime = currentTime;
+        }
         
         this.performanceManager.updateFPS(deltaTime);
         
@@ -1028,6 +1343,7 @@ export class ExperimentEngine {
             this.updatePhysics();
         }
         
+        this.updateFireEffects();
        
         this.renderer.render(this.scene, this.camera);
     }
@@ -1596,7 +1912,7 @@ export class ExperimentEngine {
         }
     }
 
-    updateParticles() {
+    updateFireEffects() {
         for (const [key, effect] of this.effects) {
             if (!effect.active) continue;
             
@@ -1605,11 +1921,22 @@ export class ExperimentEngine {
                     const lampBox = new THREE.Box3().setFromObject(this.spiritLamp);
                     const lampTopY = lampBox.max.y;
                     const lampCenter = lampBox.getCenter(new THREE.Vector3());
-                    effect.fire.position.set(lampCenter.x, lampTopY, lampCenter.z);
+                    const fireOffset = 0.2;
+                    effect.fire.position.set(lampCenter.x, lampTopY + fireOffset, lampCenter.z);
                 }
                 if (effect.fire.update && typeof effect.fire.update === 'function') {
-                    effect.fire.update(Date.now() * 0.001);
+                    const time = (performance.now() - (this.startTime || 0)) / 1000;
+                    effect.fire.update(time);
                 }
+            }
+        }
+    }
+
+    updateParticles() {
+        for (const [key, effect] of this.effects) {
+            if (!effect.active) continue;
+            
+            if (effect.type === 'threefire' && effect.fire) {
                 continue;
             }
             

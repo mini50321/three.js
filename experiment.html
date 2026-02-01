@@ -411,6 +411,49 @@
         .modal-btn-secondary:hover {
             background: rgba(30, 64, 175, 0.8);
         }
+
+        .labware-item {
+            background: rgba(30, 27, 75, 0.9);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .labware-item:hover {
+            border-color: #ff2ea8;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 46, 168, 0.3);
+        }
+
+        .labware-item-name {
+            color: #ffb3df;
+            font-weight: 500;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        .labware-item-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+
+        .labware-remove-btn {
+            background: rgba(244, 67, 54, 0.8);
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .labware-remove-btn:hover {
+            background: rgba(244, 67, 54, 1);
+        }
     </style>
 </head>
 <body>
@@ -429,6 +472,19 @@
             <div class="modal-footer">
                 <button class="modal-btn modal-btn-secondary" id="modal-reset-btn">Try Again</button>
                 <button class="modal-btn modal-btn-primary" id="modal-ok-btn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="labware-modal-overlay" class="modal-overlay" style="display: none;">
+        <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header" style="position: relative;">
+                <h2>Available Labware</h2>
+                <button id="labware-close-btn" style="position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.1); border: none; color: white; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 20px;">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="labware-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; padding: 20px;">
+                </div>
             </div>
         </div>
     </div>
@@ -457,6 +513,7 @@
                 <button id="reset-btn" disabled>Reset</button>
                 <button id="validate-btn" disabled>Validate Step</button>
                 <button id="lamp-fire-btn" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);">Turn On Lamp</button>
+                <button id="labware-btn" style="background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);">Labware</button>
                 <a href="../" class="btn-link">Back to Home</a>
             </div>
 
@@ -565,6 +622,10 @@
 
                 try {
                     engine = new ExperimentEngine('canvas-container', experimentConfig);
+                    
+                    setTimeout(() => {
+                        setupDragAndDrop();
+                    }, 500);
                     
                     if (!experimentConfig.steps || experimentConfig.steps.length === 0) {
                         console.warn('Experiment has no steps configured');
@@ -898,6 +959,232 @@
                 }
             }
         });
+
+        const availableLabwares = [
+            { path: 'assets/models/Beaker.glb', name: 'Beaker', icon: '🧪' },
+            { path: 'assets/models/Conical.glb', name: 'Conical Flask', icon: '🔬' },
+            { path: 'assets/models/TestTube.glb', name: 'Test Tube', icon: '🧪' },
+            { path: 'assets/models/graduated_Cylinder_2.glb', name: 'Graduated Cylinder', icon: '📊' },
+            { path: 'assets/models/graduated_Cylinder_3.glb', name: 'Graduated Cylinder 3', icon: '📊' },
+            { path: 'assets/models/Petri dish.glb', name: 'Petri Dish', icon: '🥽' },
+            { path: 'assets/models/Glass_Rod.glb', name: 'Glass Rod', icon: '🔬' },
+            { path: 'assets/models/cc0_-_funnel_3(1).glb', name: 'Funnel', icon: '🔬' },
+            { path: 'assets/models/chemistry_bottles.glb', name: 'Chemistry Bottles', icon: '🧪' }
+        ];
+
+        function openLabwareModal() {
+            const modal = document.getElementById('labware-modal-overlay');
+            const grid = document.getElementById('labware-grid');
+            grid.innerHTML = '';
+
+            availableLabwares.forEach(labware => {
+                const item = document.createElement('div');
+                item.className = 'labware-item';
+                item.draggable = true;
+                item.innerHTML = `
+                    <div class="labware-item-icon">${labware.icon}</div>
+                    <div class="labware-item-name">${labware.name}</div>
+                `;
+                item.dataset.path = labware.path;
+                item.dataset.name = labware.name;
+                
+                item.addEventListener('dragstart', (e) => {
+                    const dragData = { path: labware.path, name: labware.name };
+                    currentDragData = dragData;
+                    e.dataTransfer.setData('text/plain', JSON.stringify(dragData));
+                    e.dataTransfer.effectAllowed = 'copy';
+                    item.style.opacity = '0.5';
+                    const modal = document.getElementById('labware-modal-overlay');
+                    modal.style.pointerEvents = 'none';
+                    modal.style.opacity = '0.3';
+                    
+                    if (engine && engine.controls) {
+                        engine.controls.enabled = false;
+                    }
+                    
+                    if (engine) {
+                        engine.isDraggingLabware = true;
+                    }
+                });
+                
+                item.addEventListener('click', async () => {
+                    const data = { path: item.dataset.path, name: item.dataset.name };
+                    console.log('CLICK - Adding labware:', data.name);
+                    if (engine) {
+                        const canvasContainer = document.getElementById('canvas-container');
+                        const rect = canvasContainer.getBoundingClientRect();
+                        const centerX = rect.left + rect.width / 2;
+                        const centerY = rect.top + rect.height / 2;
+                        const fakeEvent = { clientX: centerX, clientY: centerY };
+                        const worldPos = engine.getWorldPositionFromMouse(fakeEvent);
+                        await engine.addLabware(data.path, data.name, worldPos);
+                        const modal = document.getElementById('labware-modal-overlay');
+                        if (modal) modal.style.display = 'none';
+                    }
+                });
+                
+                item.addEventListener('dragend', () => {
+                    item.style.opacity = '1';
+                    const modal = document.getElementById('labware-modal-overlay');
+                    modal.style.pointerEvents = 'auto';
+                    modal.style.opacity = '1';
+                    
+                    if (engine) {
+                        if (engine.controls) {
+                            engine.controls.enabled = true;
+                        }
+                        
+                        setTimeout(() => {
+                            engine.isDraggingLabware = false;
+                        }, 100);
+                    }
+                });
+                
+                grid.appendChild(item);
+            });
+
+            const sceneLabwares = engine ? Array.from(engine.objects.keys()).filter(name => {
+                const lowerName = name.toLowerCase();
+                return !lowerName.includes('table') && !lowerName.includes('laboratory') && 
+                       !lowerName.includes('spirit') && !lowerName.includes('burner') && 
+                       !lowerName.includes('electronic') && !lowerName.includes('scale');
+            }) : [];
+
+            if (sceneLabwares.length > 0) {
+                const section = document.createElement('div');
+                section.style.cssText = 'grid-column: 1 / -1; margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1);';
+                section.innerHTML = '<h3 style="color: #ffb3df; margin-bottom: 15px;">Labware on Desk</h3>';
+                grid.appendChild(section);
+
+                sceneLabwares.forEach(name => {
+                    const item = document.createElement('div');
+                    item.className = 'labware-item';
+                    item.style.cssText += 'opacity: 0.7;';
+                    item.innerHTML = `
+                        <div class="labware-item-icon">🗑️</div>
+                        <div class="labware-item-name">${name}</div>
+                        <button class="labware-remove-btn">Remove</button>
+                    `;
+                    item.querySelector('.labware-remove-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (engine) {
+                            engine.removeLabware(name);
+                            openLabwareModal();
+                        }
+                    });
+                    section.appendChild(item);
+                });
+            }
+
+            modal.style.display = 'flex';
+        }
+
+        document.getElementById('labware-btn').addEventListener('click', openLabwareModal);
+        document.getElementById('labware-close-btn').addEventListener('click', () => {
+            document.getElementById('labware-modal-overlay').style.display = 'none';
+        });
+        document.getElementById('labware-modal-overlay').addEventListener('click', (e) => {
+            if (e.target.id === 'labware-modal-overlay') {
+                document.getElementById('labware-modal-overlay').style.display = 'none';
+            }
+        });
+
+        let currentDragData = null;
+        
+        document.addEventListener('dragover', (e) => {
+            const canvasContainer = document.getElementById('canvas-container');
+            if (!canvasContainer) return;
+            
+            const rect = canvasContainer.getBoundingClientRect();
+            const x = e.clientX;
+            const y = e.clientY;
+            
+            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.dataTransfer) {
+                    e.dataTransfer.dropEffect = 'copy';
+                }
+                canvasContainer.style.border = '2px dashed #ff2ea8';
+            }
+        }, true);
+        
+        document.addEventListener('drop', async (e) => {
+            console.log('DOCUMENT DROP EVENT FIRED!', e.target);
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const canvasContainer = document.getElementById('canvas-container');
+            if (!canvasContainer) {
+                console.log('No canvas container found');
+                return;
+            }
+            
+            if (!engine) {
+                console.log('No engine found');
+                return;
+            }
+            
+            const rect = canvasContainer.getBoundingClientRect();
+            const x = e.clientX;
+            const y = e.clientY;
+            
+            console.log('Drop coordinates:', x, y, 'Container rect:', rect);
+            
+            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                console.log('Drop is inside canvas container!');
+                canvasContainer.style.border = 'none';
+                
+                if (engine.controls) {
+                    engine.controls.enabled = true;
+                }
+                
+                const modal = document.getElementById('labware-modal-overlay');
+                if (modal) {
+                    modal.style.display = 'none';
+                    modal.style.pointerEvents = 'auto';
+                    modal.style.opacity = '1';
+                }
+                
+                let data = currentDragData;
+                console.log('Current drag data:', data);
+                
+                if (!data && e.dataTransfer) {
+                    try {
+                        const dataText = e.dataTransfer.getData('text/plain');
+                        console.log('DataTransfer text:', dataText);
+                        if (dataText) {
+                            data = JSON.parse(dataText);
+                        }
+                    } catch (err) {
+                        console.error('Failed to parse drop data:', err);
+                    }
+                }
+                
+                if (data && data.path && data.name) {
+                    console.log('DROP DETECTED - Adding labware:', data.name, data.path);
+                    try {
+                        const worldPos = engine.getWorldPositionFromMouse(e);
+                        console.log('World position calculated:', worldPos);
+                        await engine.addLabware(data.path, data.name, worldPos);
+                        console.log('addLabware completed');
+                    } catch (error) {
+                        console.error('Error in addLabware:', error);
+                        console.error(error.stack);
+                    }
+                } else {
+                    console.error('No valid data for drop. Data:', data, 'Has dataTransfer:', !!e.dataTransfer);
+                }
+                
+                currentDragData = null;
+            } else {
+                console.log('Drop is outside canvas container');
+            }
+        }, true);
+        
+        function setupDragAndDrop() {
+            console.log('Drag and drop ready');
+        }
 
         function showCompletionModal() {
             const finalScore = engine.getScorePercentage();
