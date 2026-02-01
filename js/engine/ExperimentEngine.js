@@ -543,8 +543,8 @@ export class ExperimentEngine {
         
         this.targetZoomDistance = null;
         this.currentZoomDistance = this.camera.position.distanceTo(this.controls.target);
-        this.zoomSpeed = 0.15;
-        this.zoomSmoothing = 0.15;
+        this.zoomSpeed = 0.4;
+        this.zoomSmoothing = 0.2;
         
         this.renderer.domElement.addEventListener('wheel', (e) => {
             e.preventDefault();
