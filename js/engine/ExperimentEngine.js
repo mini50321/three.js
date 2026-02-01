@@ -70,6 +70,16 @@ export class ExperimentEngine {
         this.setupLighting();
         await this.physicsManager.init();
         await this.loadTable();
+        
+        console.log('Before adding beaker - interactions map size:', this.interactions.size);
+        console.log('Drag controller exists before beaker:', !!this.interactions.get('drag'));
+        
+        await this.addLabware('assets/models/Beaker.glb', 'Beaker', null);
+        console.log('After adding beaker, objects map has:', Array.from(this.objects.keys()));
+        console.log('Beaker object exists:', !!this.objects.get('Beaker'));
+        console.log('After adding beaker - interactions map size:', this.interactions.size);
+        console.log('Drag controller exists after beaker:', !!this.interactions.get('drag'));
+        
         this.animate();
     }
 
@@ -522,6 +532,11 @@ export class ExperimentEngine {
         this.renderer.domElement.style.pointerEvents = 'auto';
         
         this.container.appendChild(this.renderer.domElement);
+        
+        console.log('About to call setupInteractions from setupRenderer');
+        this.setupInteractions();
+        console.log('After setupInteractions, interactions map size:', this.interactions.size);
+        console.log('Drag controller exists:', !!this.interactions.get('drag'));
 
         window.addEventListener('resize', () => this.onWindowResize());
     }
@@ -914,7 +929,13 @@ export class ExperimentEngine {
             }
         }
         
+        console.log('About to call setupInteractions, renderer exists:', !!this.renderer);
+        console.log('About to call setupInteractions, renderer exists:', !!this.renderer, 'renderer.domElement:', !!this.renderer?.domElement);
         this.setupInteractions();
+        console.log('After setupInteractions, interactions map size:', this.interactions.size);
+        console.log('Drag controller exists:', !!this.interactions.get('drag'));
+        console.log('After setupInteractions, interactions map size:', this.interactions.size);
+        console.log('Drag controller exists:', !!this.interactions.get('drag'));
         this.storeInitialState();
         
         setTimeout(() => {
@@ -954,12 +975,15 @@ export class ExperimentEngine {
     }
 
     setupInteractions() {
+        console.log('setupInteractions called');
         this.interactions.set('drag', new DragController(this));
         this.interactions.set('tilt', new TiltController(this));
         this.interactions.set('pour', new PourController(this));
         this.interactions.set('heat', new HeatController(this));
         this.interactions.set('stir', new StirController(this));
         this.scaleController = new ScaleController(this);
+        
+        console.log('Controllers set up. Drag controller exists:', !!this.interactions.get('drag'));
         
         this.renderer.domElement.style.cursor = 'pointer';
         this.renderer.domElement.setAttribute('tabindex', '0'); 
@@ -969,14 +993,25 @@ export class ExperimentEngine {
             this.renderer.domElement.focus();
         });
         
-        this.renderer.domElement.addEventListener('mousedown', (e) => {
+        const mouseDownHandler = (e) => {
+            console.log('mousedown event fired on canvas', 'button:', e.button, 'target:', e.target);
             if (this.isDraggingLabware) {
+                console.log('isDraggingLabware is true, returning');
                 this.isDraggingLabware = false;
+                return;
             }
             if (e.button === 0) {
+                console.log('Left button clicked, calling onMouseDown');
                 this.onMouseDown(e);
+            } else {
+                console.log('Not left button, ignoring');
             }
-        }, { passive: false, capture: true });
+        };
+        this.renderer.domElement.addEventListener('mousedown', mouseDownHandler, { passive: false, capture: true });
+        console.log('mousedown listener attached. Canvas element:', this.renderer.domElement);
+        console.log('Canvas has pointer-events:', window.getComputedStyle(this.renderer.domElement).pointerEvents);
+        
+        console.log('Mouse event listeners attached');
         this.renderer.domElement.addEventListener('mousemove', (e) => this.onMouseMove(e), { passive: false });
         this.renderer.domElement.addEventListener('mouseup', (e) => this.onMouseUp(e), { passive: false });
         this.renderer.domElement.addEventListener('touchstart', (e) => this.onTouchStart(e), { passive: false });
@@ -1062,6 +1097,7 @@ export class ExperimentEngine {
                 throw new Error('Invalid GLTF file: scene is missing');
             }
             const model = gltf.scene.clone();
+            model.visible = true;
             
             let defaultScale = 1;
             let modelProps = {};
@@ -1102,8 +1138,23 @@ export class ExperimentEngine {
             const shadowsEnabled = this.performanceManager.getShadowsEnabled();
             model.traverse((child) => {
                 if (child.isMesh) {
+                    child.visible = true;
                     child.castShadow = shadowsEnabled;
                     child.receiveShadow = shadowsEnabled;
+                    if (child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(mat => {
+                                if (mat) {
+                                    mat.needsUpdate = true;
+                                    mat.transparent = false;
+                                }
+                            });
+                        } else {
+                            child.material.needsUpdate = true;
+                            child.material.transparent = false;
+                        }
+                    }
+                    child.frustumCulled = false;
                 }
             });
             
@@ -1144,7 +1195,7 @@ export class ExperimentEngine {
             if (position) {
                 const objectSize = box.getSize(new THREE.Vector3());
                 const objectRadius = Math.max(objectSize.x, objectSize.z) / 2;
-                model.position.set(position.x, position.y || 0, position.z);
+                model.position.set(position.x, position.y || tableTopY, position.z);
                 if (this.tableBounds) {
                     model.position.x = Math.max(this.tableBounds.minX + objectRadius + 0.1, 
                                                Math.min(this.tableBounds.maxX - objectRadius - 0.1, model.position.x));
@@ -1161,7 +1212,7 @@ export class ExperimentEngine {
             let boxPositioned = new THREE.Box3().setFromObject(model);
             let minYPositioned = boxPositioned.min.y;
             
-            while (Math.abs(minYPositioned - tableTopY) > 0.001 && attempts < 20) {
+            while (Math.abs(minYPositioned - tableTopY) > 0.01 && attempts < 50) {
                 const correction = tableTopY - minYPositioned;
                 model.position.y += correction;
                 model.updateMatrixWorld(true);
@@ -1196,7 +1247,7 @@ export class ExperimentEngine {
                 },
                 interactions: {
                     draggable: true,
-                    tiltable: modelProps.canPour !== false,
+                    tiltable: true,
                     heatable: modelProps.canHeat !== false,
                     canPour: modelProps.canPour !== false
                 },
@@ -1230,12 +1281,51 @@ export class ExperimentEngine {
                 }
             }
             
-            this.objects.set(name, objectData);
             this.scene.add(model);
-            console.log(`Labware ${name} added to scene at position:`, model.position, 'scale:', model.scale);
-            console.log(`Total objects in scene: ${this.objects.size}`);
-            console.log(`Model visible:`, model.visible);
-            console.log(`Model in scene:`, this.scene.children.includes(model));
+            this.objects.set(name, objectData);
+            
+            console.log('Beaker added - Name:', name, 'Objects count:', this.objects.size);
+            console.log('Beaker position:', model.position);
+            console.log('Beaker in scene:', this.scene.children.includes(model));
+            console.log('Beaker visible:', model.visible);
+            console.log('Beaker interactions:', objectData.interactions);
+            
+            model.visible = true;
+            model.matrixAutoUpdate = true;
+            model.renderOrder = 0;
+            model.userData.objectName = name;
+            
+            model.traverse((child) => {
+                child.visible = true;
+                child.matrixAutoUpdate = true;
+                child.userData.objectName = name;
+                if (child.isMesh) {
+                    child.frustumCulled = false;
+                    child.renderOrder = 0;
+                    if (!child.material) {
+                        child.material = new THREE.MeshStandardMaterial({ color: 0x888888 });
+                    }
+                    if (Array.isArray(child.material)) {
+                        child.material.forEach(mat => {
+                            if (mat) {
+                                mat.visible = true;
+                                mat.transparent = false;
+                                mat.opacity = 1.0;
+                            }
+                        });
+                    } else {
+                        child.material.visible = true;
+                        child.material.transparent = false;
+                        child.material.opacity = 1.0;
+                    }
+                }
+            });
+            
+            model.updateMatrixWorld(true);
+            
+            if (objectData.physicsBody) {
+                this.physicsManager.syncBodyToMesh(objectData.physicsBody, model);
+            }
             
             if (this.initialState) {
                 this.initialState.set(name, {
@@ -2428,6 +2518,7 @@ export class ExperimentEngine {
     }
 
     onMouseDown(event) {
+        console.log('onMouseDown called', 'objects count:', this.objects.size);
         
         if (event.button !== 0) {
             return;
@@ -2438,6 +2529,25 @@ export class ExperimentEngine {
             return;
         }
         
+        console.log('Checking objects:', Array.from(this.objects.keys()));
+        for (const [name, obj] of this.objects) {
+            console.log('Checking object:', name, 'has mesh:', !!obj.mesh, 'has interactions:', !!obj.interactions, 'draggable:', obj.interactions?.draggable);
+            if (obj && obj.mesh && obj.interactions && obj.interactions.draggable) {
+                const lowerName = name.toLowerCase();
+                if (lowerName.includes('beaker')) {
+                    console.log('Direct beaker selection:', name);
+                    this.selectObject(obj);
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (this.controls) {
+                        this.controls.enabled = false;
+                    }
+                    this.handleInteractionStart(obj, event);
+                    return;
+                }
+            }
+        }
+        
         const rect = this.renderer.domElement.getBoundingClientRect();
         this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -2446,8 +2556,11 @@ export class ExperimentEngine {
         const allMeshes = [];
         for (const [name, obj] of this.objects) {
             if (obj && obj.mesh) {
+                allMeshes.push(obj.mesh);
+                obj.mesh.updateMatrixWorld(true);
                 obj.mesh.traverse((child) => {
                     if (child.isMesh) {
+                        child.updateMatrixWorld(true);
                         allMeshes.push(child);
                     }
                 });
@@ -2474,33 +2587,70 @@ export class ExperimentEngine {
                 }
             });
         }
-        const intersects = this.raycaster.intersectObjects(allMeshes, true);
+        const intersects = this.raycaster.intersectObjects(allMeshes, false);
         
         if (intersects.length > 0) {
-            const clickedObject = this.findObjectByMesh(intersects[0].object);
-            if (clickedObject) {
-                console.log('Object clicked:', clickedObject.name, 'draggable:', clickedObject.interactions?.draggable);
+            for (let i = 0; i < intersects.length; i++) {
+                let clickedObject = null;
+                const hitMesh = intersects[i].object;
                 
-                if (clickedObject.interactions && (clickedObject.interactions.draggable || clickedObject.interactions.tiltable)) {
-                    if (this.controls) {
-                        this.controls.enabled = false;
+                if (hitMesh.userData && hitMesh.userData.objectName) {
+                    clickedObject = this.objects.get(hitMesh.userData.objectName);
+                }
+                
+                if (!clickedObject) {
+                    clickedObject = this.findObjectByMesh(hitMesh);
+                }
+                
+                if (!clickedObject && hitMesh.parent) {
+                    let parent = hitMesh.parent;
+                    while (parent && !clickedObject) {
+                        if (parent.userData && parent.userData.objectName) {
+                            clickedObject = this.objects.get(parent.userData.objectName);
+                        }
+                        if (!clickedObject) {
+                            clickedObject = this.findObjectByMesh(parent);
+                        }
+                        parent = parent.parent;
                     }
-                    event.preventDefault();
-                    event.stopPropagation();
-                    this.handleInteractionStart(clickedObject, event);
-                    return;
-                } else {
+                }
+                
+                if (clickedObject) {
                     this.selectObject(clickedObject);
                     event.preventDefault();
                     event.stopPropagation();
+                    
+                    if (clickedObject.interactions && (clickedObject.interactions.draggable || clickedObject.interactions.tiltable)) {
+                        if (this.controls) {
+                            this.controls.enabled = false;
+                        }
+                        this.handleInteractionStart(clickedObject, event);
+                    }
                     return;
                 }
-            } else {
-                console.log('Clicked mesh but no object found. Total objects:', this.objects.size);
             }
-        } else {
-            this.selectObject(null);
         }
+        
+        if (intersects.length === 0 && this.objects.size > 0) {
+            for (const [name, obj] of this.objects) {
+                if (obj && obj.mesh && obj.interactions && obj.interactions.draggable) {
+                    const lowerName = name.toLowerCase();
+                    if (lowerName.includes('beaker') || lowerName.includes('flask') || lowerName.includes('bottle')) {
+                        console.log('Fallback: Selecting beaker by name:', name);
+                        this.selectObject(obj);
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (this.controls) {
+                            this.controls.enabled = false;
+                        }
+                        this.handleInteractionStart(obj, event);
+                        return;
+                    }
+                }
+            }
+        }
+        
+        this.selectObject(null);
         
         if (this.controls && !this.controls.enabled) {
             this.controls.enabled = true;
@@ -2508,8 +2658,9 @@ export class ExperimentEngine {
     }
 
     onMouseMove(event) {
-        this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         
         if (this.activeController) {
             event.preventDefault();
@@ -2554,7 +2705,31 @@ export class ExperimentEngine {
     }
 
     findObjectByMesh(mesh) {
+        if (!mesh) return null;
+        
+        if (mesh.userData && mesh.userData.objectName) {
+            const obj = this.objects.get(mesh.userData.objectName);
+            if (obj) return obj;
+        }
+        
+        if (mesh.parent) {
+            let parent = mesh.parent;
+            while (parent) {
+                if (parent.userData && parent.userData.objectName) {
+                    const obj = this.objects.get(parent.userData.objectName);
+                    if (obj) return obj;
+                }
+                parent = parent.parent;
+            }
+        }
+        
         for (const [name, obj] of this.objects) {
+            if (!obj || !obj.mesh) continue;
+            
+            if (obj.mesh === mesh) {
+                return obj;
+            }
+            
             let found = false;
             obj.mesh.traverse((child) => {
                 if (child === mesh) found = true;
@@ -2591,56 +2766,46 @@ export class ExperimentEngine {
 
     handleInteractionStart(obj, event) {
         this.selectObject(obj);
-        console.log('handleInteractionStart', obj.name, 'isRunning:', this.isRunning, 'interactions:', obj.interactions);
         
         if (!obj || !obj.interactions) {
-            console.error('Object has no interactions:', obj);
+            console.error('No interactions for object:', obj);
             return;
         }
         
         if (this.isRunning) {
             const currentStep = this.config.steps?.[this.currentStep];
-            if (currentStep) {
-                if (obj.name !== currentStep.equipment) {
-                    this.addFeedback(`Please use ${currentStep.equipment} for this step.`);
-                    return;
-                }
-                
-                const action = currentStep.action;
-                let controller = null;
-                
-                if (action === 'tilt' && obj.interactions.tiltable) {
-                    controller = this.interactions.get('tilt');
-                } else if (action === 'drag' && obj.interactions.draggable) {
-                    controller = this.interactions.get('drag');
-                } else if (action === 'pour' && (obj.properties.isContainer || obj.properties.canPour)) {
-                    controller = this.interactions.get('pour');
-                } else if (action === 'heat' && obj.interactions.heatable) {
-                    controller = this.interactions.get('heat');
-                } else if (action === 'stir') {
-                    controller = this.interactions.get('stir');
-                }
-                
-                if (controller) {
-                    this.controls.enabled = false;
-                    this.activeController = controller;
-                    controller.start(obj, event);
-                    return;
-                }
+            if (currentStep && obj.name !== currentStep.equipment) {
+                this.addFeedback(`Please use ${currentStep.equipment} for this step.`);
             }
         }
         
         if (obj.interactions.draggable) {
-            this.controls.enabled = false;
-            this.activeController = this.interactions.get('drag');
-            if (this.activeController) {
-                this.activeController.start(obj, event);
+            const dragController = this.interactions.get('drag');
+            if (dragController) {
+                if (this.controls) {
+                    this.controls.enabled = false;
+                }
+                this.activeController = dragController;
+                dragController.start(obj, event);
+                console.log('Drag started for:', obj.name);
+                return;
+            } else {
+                console.error('Drag controller not found!');
             }
-        } else if (obj.interactions.tiltable) {
-            this.controls.enabled = false;
-            this.activeController = this.interactions.get('tilt');
-            if (this.activeController) {
-                this.activeController.start(obj, event);
+        }
+        
+        if (obj.interactions.tiltable) {
+            const tiltController = this.interactions.get('tilt');
+            if (tiltController) {
+                if (this.controls) {
+                    this.controls.enabled = false;
+                }
+                this.activeController = tiltController;
+                tiltController.start(obj, event);
+                console.log('Tilt started for:', obj.name);
+                return;
+            } else {
+                console.error('Tilt controller not found!');
             }
         }
     }
