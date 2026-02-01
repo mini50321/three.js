@@ -706,12 +706,54 @@
             const timerPause = document.getElementById('timer-pause');
             const timerReset = document.getElementById('timer-reset');
 
+            function updateControlsForObject(obj) {
+                if (!obj) {
+                    if (temperatureSlider) temperatureSlider.value = 20;
+                    if (temperatureValue) temperatureValue.textContent = '20°C';
+                    if (volumeInput) volumeInput.value = 0;
+                    return;
+                }
+
+                const temp = obj.properties.temperature || 20;
+                if (temperatureSlider) {
+                    temperatureSlider.value = Math.round(temp);
+                    temperatureSlider.disabled = false;
+                }
+                if (temperatureValue) {
+                    temperatureValue.textContent = Math.round(temp) + '°C';
+                }
+
+                if (obj.properties.isContainer) {
+                    const volume = engine ? engine.calculateVolume(obj) : (obj.properties.volume || 0);
+                    if (volumeInput) {
+                        volumeInput.value = Math.round(volume * 10) / 10;
+                        volumeInput.disabled = false;
+                    }
+                } else {
+                    if (volumeInput) {
+                        volumeInput.value = 0;
+                        volumeInput.disabled = true;
+                    }
+                }
+            }
+
+            document.addEventListener('objectSelected', (e) => {
+                const obj = e.detail.object;
+                updateControlsForObject(obj);
+            });
+
             if (temperatureSlider && temperatureValue) {
                 temperatureSlider.addEventListener('input', (e) => {
                     const temp = parseInt(e.target.value);
                     temperatureValue.textContent = temp + '°C';
                     if (engine && engine.selectedObject) {
                         engine.selectedObject.properties.temperature = temp;
+                        if (engine.updateLiquidMesh) {
+                            engine.updateLiquidMesh(engine.selectedObject);
+                        }
+                        if (engine.updateEffects) {
+                            engine.updateEffects(engine.selectedObject);
+                        }
                     }
                 });
             }
@@ -719,8 +761,11 @@
             if (volumeInput) {
                 volumeInput.addEventListener('change', (e) => {
                     const volume = parseFloat(e.target.value);
-                    if (engine && engine.selectedObject) {
+                    if (engine && engine.selectedObject && engine.selectedObject.properties.isContainer) {
                         engine.selectedObject.properties.volume = volume;
+                        if (engine.updateLiquidMesh) {
+                            engine.updateLiquidMesh(engine.selectedObject);
+                        }
                     }
                 });
             }
@@ -786,6 +831,26 @@
                         String(seconds).padStart(2, '0');
                 }
             }
+
+            setInterval(() => {
+                if (engine && engine.selectedObject) {
+                    const obj = engine.selectedObject;
+                    const temp = obj.properties.temperature || 20;
+                    if (temperatureSlider && !temperatureSlider.matches(':focus')) {
+                        temperatureSlider.value = Math.round(temp);
+                    }
+                    if (temperatureValue) {
+                        temperatureValue.textContent = Math.round(temp) + '°C';
+                    }
+                    
+                    if (obj.properties.isContainer) {
+                        const volume = engine.calculateVolume ? engine.calculateVolume(obj) : (obj.properties.volume || 0);
+                        if (volumeInput && !volumeInput.matches(':focus')) {
+                            volumeInput.value = Math.round(volume * 10) / 10;
+                        }
+                    }
+                }
+            }, 100);
         }
 
         function updateStepInfo() {
@@ -1007,10 +1072,14 @@
                     }
                 });
                 
-                item.addEventListener('click', async () => {
+                item.addEventListener('click', async (e) => {
+                    e.stopPropagation();
                     const data = { path: item.dataset.path, name: item.dataset.name };
                     console.log('CLICK - Adding labware:', data.name);
                     if (engine) {
+                        if (engine.isDraggingLabware) {
+                            engine.isDraggingLabware = false;
+                        }
                         const canvasContainer = document.getElementById('canvas-container');
                         const rect = canvasContainer.getBoundingClientRect();
                         const centerX = rect.left + rect.width / 2;

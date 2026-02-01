@@ -57,6 +57,7 @@ export class ExperimentEngine {
         this.electricBalance = null;
         this.spiritLampFireOn = false;
         this.spiritLampFire = null;
+        this.isDraggingLabware = false;
         
         this.init();
     }
@@ -528,29 +529,45 @@ export class ExperimentEngine {
     setupControls() {
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableDamping = true;
-        this.controls.dampingFactor = 0.1;
+        this.controls.dampingFactor = 0.15;
         this.controls.minDistance = 2;
         this.controls.maxDistance = 20;
         this.controls.enablePan = true;
-        this.controls.enableZoom = true;
+        this.controls.enableZoom = false;
         this.controls.enableRotate = true;
-        this.controls.zoomSpeed = 0.05;
+        this.controls.screenSpacePanning = false;
         this.controls.enabled = true;
         
         this.controls.target.set(0, 0, 0);
         this.controls.update();
         
-        this.targetZoomDistance = null; 
+        this.targetZoomDistance = null;
+        this.currentZoomDistance = this.camera.position.distanceTo(this.controls.target);
+        this.zoomSpeed = 0.05;
+        this.zoomSmoothing = 0.1;
         
+        this.renderer.domElement.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            
+            const delta = e.deltaY;
+            const currentDistance = this.camera.position.distanceTo(this.controls.target);
+            const zoomFactor = 1 + (delta > 0 ? this.zoomSpeed : -this.zoomSpeed);
+            const newDistance = currentDistance * zoomFactor;
+            
+            const clampedDistance = Math.max(
+                this.controls.minDistance,
+                Math.min(this.controls.maxDistance, newDistance)
+            );
+            
+            this.targetZoomDistance = clampedDistance;
+        }, { passive: false });
     
         this.renderer.domElement.focus();
-        
         
         console.log('OrbitControls initialized:', {
             enabled: this.controls.enabled,
             enableZoom: this.controls.enableZoom,
-            enableRotate: this.controls.enableRotate,
-            zoomSpeed: this.controls.zoomSpeed
+            enableRotate: this.controls.enableRotate
         });
     }
 
@@ -954,12 +971,12 @@ export class ExperimentEngine {
         
         this.renderer.domElement.addEventListener('mousedown', (e) => {
             if (this.isDraggingLabware) {
-                return;
+                this.isDraggingLabware = false;
             }
             if (e.button === 0) {
                 this.onMouseDown(e);
             }
-        }, { passive: false });
+        }, { passive: false, capture: true });
         this.renderer.domElement.addEventListener('mousemove', (e) => this.onMouseMove(e), { passive: false });
         this.renderer.domElement.addEventListener('mouseup', (e) => this.onMouseUp(e), { passive: false });
         this.renderer.domElement.addEventListener('touchstart', (e) => this.onTouchStart(e), { passive: false });
@@ -1324,15 +1341,17 @@ export class ExperimentEngine {
       
         if (this.controls) {
             if (this.targetZoomDistance !== null) {
-                const distance = this.camera.position.distanceTo(this.controls.target);
-                const diff = this.targetZoomDistance - distance;
-                if (Math.abs(diff) > 0.01) {
-                    const lerpFactor = 0.2;
-                    const newDistance = distance + diff * lerpFactor;
+                const currentDistance = this.camera.position.distanceTo(this.controls.target);
+                const diff = this.targetZoomDistance - currentDistance;
+                
+                if (Math.abs(diff) > 0.001) {
+                    const newDistance = currentDistance + diff * this.zoomSmoothing;
                     const direction = this.camera.position.clone().sub(this.controls.target).normalize();
                     this.camera.position.copy(this.controls.target.clone().add(direction.multiplyScalar(newDistance)));
+                    this.currentZoomDistance = newDistance;
                 } else {
                     this.targetZoomDistance = null;
+                    this.currentZoomDistance = this.camera.position.distanceTo(this.controls.target);
                 }
             }
             this.controls.update();
@@ -1374,7 +1393,19 @@ export class ExperimentEngine {
                     this.constrainToTable(obj);
                 }
                 
-                if (obj.properties.temperature > 20) {
+                if (this.spiritLampFireOn && this.spiritLamp) {
+                    const lampBox = new THREE.Box3().setFromObject(this.spiritLamp);
+                    const lampCenter = lampBox.getCenter(new THREE.Vector3());
+                    const objBox = new THREE.Box3().setFromObject(obj.mesh);
+                    const objCenter = objBox.getCenter(new THREE.Vector3());
+                    const distance = lampCenter.distanceTo(objCenter);
+                    const heatingDistance = 1.5;
+                    
+                    if (distance < heatingDistance && obj.properties.isContainer && obj.properties.volume > 0) {
+                        const heatRate = 0.3 * (1 - distance / heatingDistance);
+                        obj.properties.temperature = Math.min(obj.properties.temperature + heatRate, 200);
+                    }
+                } else if (obj.properties.temperature > 20) {
                     obj.properties.temperature -= 0.05;
                 }
                 
@@ -1480,7 +1511,19 @@ export class ExperimentEngine {
             for (const [name, obj] of this.objects) {
                 this.constrainToTable(obj);
                 
-                if (obj.properties.temperature > 20) {
+                if (this.spiritLampFireOn && this.spiritLamp) {
+                    const lampBox = new THREE.Box3().setFromObject(this.spiritLamp);
+                    const lampCenter = lampBox.getCenter(new THREE.Vector3());
+                    const objBox = new THREE.Box3().setFromObject(obj.mesh);
+                    const objCenter = objBox.getCenter(new THREE.Vector3());
+                    const distance = lampCenter.distanceTo(objCenter);
+                    const heatingDistance = 1.5;
+                    
+                    if (distance < heatingDistance && obj.properties.isContainer && obj.properties.volume > 0) {
+                        const heatRate = 0.3 * (1 - distance / heatingDistance);
+                        obj.properties.temperature = Math.min(obj.properties.temperature + heatRate, 200);
+                    }
+                } else if (obj.properties.temperature > 20) {
                     obj.properties.temperature -= 0.05;
                 }
                 
@@ -2387,7 +2430,11 @@ export class ExperimentEngine {
     onMouseDown(event) {
         
         if (event.button !== 0) {
-            
+            return;
+        }
+        
+        if (this.isDraggingLabware) {
+            this.isDraggingLabware = false;
             return;
         }
         
@@ -2398,11 +2445,13 @@ export class ExperimentEngine {
         this.raycaster.setFromCamera(this.mouse, this.camera);
         const allMeshes = [];
         for (const [name, obj] of this.objects) {
-            obj.mesh.traverse((child) => {
-                if (child.isMesh) {
-                    allMeshes.push(child);
-                }
-            });
+            if (obj && obj.mesh) {
+                obj.mesh.traverse((child) => {
+                    if (child.isMesh) {
+                        allMeshes.push(child);
+                    }
+                });
+            }
         }
         if (this.electricBalance) {
             this.electricBalance.traverse((child) => {
@@ -2430,12 +2479,32 @@ export class ExperimentEngine {
         if (intersects.length > 0) {
             const clickedObject = this.findObjectByMesh(intersects[0].object);
             if (clickedObject) {
-                event.preventDefault();
-                event.stopPropagation();
-                this.handleInteractionStart(clickedObject, event);
+                console.log('Object clicked:', clickedObject.name, 'draggable:', clickedObject.interactions?.draggable);
+                
+                if (clickedObject.interactions && (clickedObject.interactions.draggable || clickedObject.interactions.tiltable)) {
+                    if (this.controls) {
+                        this.controls.enabled = false;
+                    }
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.handleInteractionStart(clickedObject, event);
+                    return;
+                } else {
+                    this.selectObject(clickedObject);
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+            } else {
+                console.log('Clicked mesh but no object found. Total objects:', this.objects.size);
             }
+        } else {
+            this.selectObject(null);
         }
-       
+        
+        if (this.controls && !this.controls.enabled) {
+            this.controls.enabled = true;
+        }
     }
 
     onMouseMove(event) {
@@ -2521,8 +2590,13 @@ export class ExperimentEngine {
     }
 
     handleInteractionStart(obj, event) {
-        this.selectedObject = obj;
-        console.log('handleInteractionStart', obj.name, this.isRunning, obj.interactions);
+        this.selectObject(obj);
+        console.log('handleInteractionStart', obj.name, 'isRunning:', this.isRunning, 'interactions:', obj.interactions);
+        
+        if (!obj || !obj.interactions) {
+            console.error('Object has no interactions:', obj);
+            return;
+        }
         
         if (this.isRunning) {
             const currentStep = this.config.steps?.[this.currentStep];
@@ -2568,6 +2642,18 @@ export class ExperimentEngine {
             if (this.activeController) {
                 this.activeController.start(obj, event);
             }
+        }
+    }
+
+    selectObject(obj) {
+        this.selectedObject = obj;
+        if (obj) {
+            console.log('Object selected:', obj.name);
+            const event = new CustomEvent('objectSelected', { detail: { object: obj } });
+            document.dispatchEvent(event);
+        } else {
+            const event = new CustomEvent('objectSelected', { detail: { object: null } });
+            document.dispatchEvent(event);
         }
     }
 
