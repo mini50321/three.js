@@ -1353,20 +1353,41 @@ export class ExperimentEngine {
     }
 
     removeLabware(name) {
+        console.log('removeLabware called for:', name);
         const obj = this.objects.get(name);
         if (!obj) {
             console.warn(`Labware ${name} not found`);
-            return;
+            return false;
         }
         
         const lowerName = name.toLowerCase();
         if (lowerName.includes('table') || lowerName.includes('laboratory')) {
             console.warn(`Cannot remove ${name}`);
-            return;
+            return false;
         }
         
         if (obj.mesh) {
             this.scene.remove(obj.mesh);
+            
+            obj.mesh.traverse((child) => {
+                if (child.isMesh) {
+                    if (child.geometry) {
+                        child.geometry.dispose();
+                    }
+                    if (child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(mat => {
+                                if (mat.map) mat.map.dispose();
+                                mat.dispose();
+                            });
+                        } else {
+                            if (child.material.map) child.material.map.dispose();
+                            child.material.dispose();
+                        }
+                    }
+                }
+            });
+            
             if (obj.mesh.geometry) obj.mesh.geometry.dispose();
             if (obj.mesh.material) {
                 if (Array.isArray(obj.mesh.material)) {
@@ -1391,6 +1412,10 @@ export class ExperimentEngine {
             if (liquidMesh.geometry) liquidMesh.geometry.dispose();
             if (liquidMesh.material) liquidMesh.material.dispose();
             this.liquidMeshes.delete(name);
+        }
+        
+        if (this.selectedObject && this.selectedObject.name === name) {
+            this.selectedObject = null;
         }
         
         this.objects.delete(name);
@@ -1424,6 +1449,9 @@ export class ExperimentEngine {
             this.spiritLampFireOn = false;
             this.updateLampButtonVisibility();
         }
+        
+        console.log(`Labware ${name} removed successfully`);
+        return true;
     }
     
     updateLampButtonVisibility() {

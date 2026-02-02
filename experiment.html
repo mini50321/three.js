@@ -1292,9 +1292,7 @@
 
             const sceneLabwares = engine ? Array.from(engine.objects.keys()).filter(name => {
                 const lowerName = name.toLowerCase();
-                return !lowerName.includes('table') && !lowerName.includes('laboratory') && 
-                       !lowerName.includes('spirit') && !lowerName.includes('burner') && 
-                       !lowerName.includes('electronic') && !lowerName.includes('scale');
+                return !lowerName.includes('table') && !lowerName.includes('laboratory');
             }) : [];
 
             if (sceneLabwares.length > 0) {
@@ -1306,7 +1304,7 @@
                 sceneLabwares.forEach(name => {
                     const item = document.createElement('div');
                     item.className = 'labware-item';
-                    item.style.cssText += 'opacity: 0.85; border-color: rgba(255,255,255,0.15);';
+                    item.style.cssText += 'opacity: 0.85; border-color: rgba(255,255,255,0.15); position: relative;';
                     item.innerHTML = `
                         <div class="labware-item-icon">
                             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1317,13 +1315,34 @@
                             </svg>
                         </div>
                         <div class="labware-item-name">${name}</div>
-                        <button class="labware-remove-btn">Remove</button>
+                        <button class="labware-remove-btn" style="position: relative; z-index: 10; pointer-events: auto;">Remove</button>
                     `;
-                    item.querySelector('.labware-remove-btn').addEventListener('click', (e) => {
+                    const removeBtn = item.querySelector('.labware-remove-btn');
+                    removeBtn.addEventListener('click', async (e) => {
                         e.stopPropagation();
+                        e.preventDefault();
+                        console.log('Remove button clicked for:', name);
                         if (engine) {
-                            engine.removeLabware(name);
-                            openLabwareModal();
+                            try {
+                                const result = engine.removeLabware(name);
+                                console.log('removeLabware result:', result);
+                                if (result !== false) {
+                                    const modal = document.getElementById('labware-modal-overlay');
+                                    if (modal) {
+                                        modal.style.display = 'none';
+                                    }
+                                    setTimeout(() => {
+                                        openLabwareModal();
+                                    }, 100);
+                                } else {
+                                    console.error('Failed to remove labware:', name);
+                                }
+                            } catch (error) {
+                                console.error('Error removing labware:', error);
+                                console.error(error.stack);
+                            }
+                        } else {
+                            console.error('Engine not available');
                         }
                     });
                     section.appendChild(item);
