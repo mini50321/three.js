@@ -70,6 +70,7 @@ export class ExperimentEngine {
         this.setupLighting();
         await this.physicsManager.init();
         await this.loadTable();
+        this.updateLampButtonVisibility();
         this.animate();
     }
 
@@ -336,6 +337,7 @@ export class ExperimentEngine {
                 physicsBody: null
             };
             this.objects.set('Spirit Lamp', lampData);
+            this.updateLampButtonVisibility();
             
             const burnerGltf = await loader.loadAsync('assets/models/Burner Stand.glb');
             const burnerStand = burnerGltf.scene;
@@ -1288,6 +1290,7 @@ export class ExperimentEngine {
             
             if (lowerName.includes('spirit') || lowerName.includes('lamp')) {
                 this.spiritLamp = model;
+                this.updateLampButtonVisibility();
             }
             
             console.log('Beaker added - Name:', name, 'Objects count:', this.objects.size);
@@ -1393,6 +1396,42 @@ export class ExperimentEngine {
         this.objects.delete(name);
         if (this.initialState) {
             this.initialState.delete(name);
+        }
+        
+        if (lowerName.includes('spirit') || lowerName.includes('lamp')) {
+            this.spiritLamp = null;
+            if (this.spiritLampFire) {
+                this.scene.remove(this.spiritLampFire);
+                if (this.spiritLampFire.dispose && typeof this.spiritLampFire.dispose === 'function') {
+                    this.spiritLampFire.dispose();
+                } else {
+                    if (this.spiritLampFire.geometry) this.spiritLampFire.geometry.dispose();
+                    if (this.spiritLampFire.material) {
+                        if (Array.isArray(this.spiritLampFire.material)) {
+                            this.spiritLampFire.material.forEach(mat => {
+                                if (mat.map) mat.map.dispose();
+                                mat.dispose();
+                            });
+                        } else {
+                            if (this.spiritLampFire.material.map) this.spiritLampFire.material.map.dispose();
+                            this.spiritLampFire.material.dispose();
+                        }
+                    }
+                }
+                this.spiritLampFire = null;
+                this.effects.delete('spiritLamp_fire');
+            }
+            this.spiritLampFireOn = false;
+            this.updateLampButtonVisibility();
+        }
+    }
+    
+    updateLampButtonVisibility() {
+        const btn = document.getElementById('lamp-fire-btn');
+        if (btn) {
+            const hasSpiritLamp = this.spiritLamp !== null || 
+                                 (this.objects.has('Spirit Lamp') && this.objects.get('Spirit Lamp').mesh);
+            btn.style.display = hasSpiritLamp ? 'block' : 'none';
         }
     }
 
