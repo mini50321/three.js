@@ -70,16 +70,6 @@ export class ExperimentEngine {
         this.setupLighting();
         await this.physicsManager.init();
         await this.loadTable();
-        
-        console.log('Before adding beaker - interactions map size:', this.interactions.size);
-        console.log('Drag controller exists before beaker:', !!this.interactions.get('drag'));
-        
-        await this.addLabware('assets/models/Beaker.glb', 'Beaker', null);
-        console.log('After adding beaker, objects map has:', Array.from(this.objects.keys()));
-        console.log('Beaker object exists:', !!this.objects.get('Beaker'));
-        console.log('After adding beaker - interactions map size:', this.interactions.size);
-        console.log('Drag controller exists after beaker:', !!this.interactions.get('drag'));
-        
         this.animate();
     }
 
