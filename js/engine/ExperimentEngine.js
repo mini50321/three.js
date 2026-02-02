@@ -2529,20 +2529,6 @@ export class ExperimentEngine {
             return;
         }
         
-        console.log('Checking objects:', Array.from(this.objects.keys()));
-        for (const [name, obj] of this.objects) {
-            console.log('Checking object:', name, 'has mesh:', !!obj.mesh, 'has interactions:', !!obj.interactions, 'draggable:', obj.interactions?.draggable);
-            if (obj && obj.mesh && obj.interactions && obj.interactions.draggable) {
-                const lowerName = name.toLowerCase();
-                if (lowerName.includes('beaker')) {
-                    console.log('Direct beaker selection:', name);
-                    this.selectObject(obj);
-                    event.preventDefault();
-                    event.stopPropagation();
-                    return;
-                }
-            }
-        }
         
         const rect = this.renderer.domElement.getBoundingClientRect();
         this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
