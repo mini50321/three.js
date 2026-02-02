@@ -2539,10 +2539,6 @@ export class ExperimentEngine {
                     this.selectObject(obj);
                     event.preventDefault();
                     event.stopPropagation();
-                    if (this.controls) {
-                        this.controls.enabled = false;
-                    }
-                    this.handleInteractionStart(obj, event);
                     return;
                 }
             }
@@ -2619,13 +2615,6 @@ export class ExperimentEngine {
                     this.selectObject(clickedObject);
                     event.preventDefault();
                     event.stopPropagation();
-                    
-                    if (clickedObject.interactions && (clickedObject.interactions.draggable || clickedObject.interactions.tiltable)) {
-                        if (this.controls) {
-                            this.controls.enabled = false;
-                        }
-                        this.handleInteractionStart(clickedObject, event);
-                    }
                     return;
                 }
             }
@@ -2640,10 +2629,6 @@ export class ExperimentEngine {
                         this.selectObject(obj);
                         event.preventDefault();
                         event.stopPropagation();
-                        if (this.controls) {
-                            this.controls.enabled = false;
-                        }
-                        this.handleInteractionStart(obj, event);
                         return;
                     }
                 }
