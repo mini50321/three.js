@@ -1196,10 +1196,16 @@ export class ExperimentEngine {
                 initialPosition = new THREE.Vector3(0, 0, 0);
             }
             
+            model.updateMatrixWorld(true);
+            const initialBox = new THREE.Box3().setFromObject(model);
+            const initialMinY = initialBox.min.y;
+            const modelCurrentY = model.position.y;
+            const offsetFromOrigin = initialMinY - modelCurrentY;
+            
             if (position) {
                 const objectSize = box.getSize(new THREE.Vector3());
                 const objectRadius = Math.max(objectSize.x, objectSize.z) / 2;
-                model.position.set(position.x, position.y || tableTopY, position.z);
+                model.position.set(position.x, tableTopY - offsetFromOrigin, position.z);
                 if (this.tableBounds) {
                     model.position.x = Math.max(this.tableBounds.minX + objectRadius + 0.1, 
                                                Math.min(this.tableBounds.maxX - objectRadius - 0.1, model.position.x));
@@ -1207,7 +1213,7 @@ export class ExperimentEngine {
                                                Math.min(this.tableBounds.maxZ - objectRadius - 0.1, model.position.z));
                 }
             } else {
-                model.position.copy(initialPosition);
+                model.position.set(initialPosition.x, tableTopY - offsetFromOrigin, initialPosition.z);
             }
             
             model.updateMatrixWorld(true);
@@ -1223,6 +1229,10 @@ export class ExperimentEngine {
                 boxPositioned = new THREE.Box3().setFromObject(model);
                 minYPositioned = boxPositioned.min.y;
                 attempts++;
+            }
+            
+            if (attempts >= 50 || Math.abs(minYPositioned - tableTopY) > 0.01) {
+                console.warn(`Positioning issue for ${name}: minY=${minYPositioned.toFixed(3)}, tableTopY=${tableTopY.toFixed(3)}, attempts=${attempts}`);
             }
             
             const centerFinal = boxPositioned.getCenter(new THREE.Vector3());
@@ -1260,7 +1270,9 @@ export class ExperimentEngine {
                     temperature: 20,
                     contents: []
                 },
-                physicsBody: null
+                physicsBody: null,
+                initializing: true,
+                justReleased: false
             };
             
             if (this.physicsManager && this.physicsManager.world) {
@@ -1280,6 +1292,9 @@ export class ExperimentEngine {
                     const boxWorld = new THREE.Box3().setFromObject(model);
                     const centerWorld = boxWorld.getCenter(new THREE.Vector3());
                     body.position.set(centerWorld.x, centerWorld.y, centerWorld.z);
+                    body.type = this.physicsManager.CANNON.Body.KINEMATIC;
+                    body.velocity.set(0, 0, 0);
+                    body.angularVelocity.set(0, 0, 0);
                     this.physicsManager.addBody(name, body);
                     objectData.physicsBody = body;
                 }
@@ -1333,8 +1348,27 @@ export class ExperimentEngine {
             model.updateMatrixWorld(true);
             
             if (objectData.physicsBody) {
-                this.physicsManager.syncBodyToMesh(objectData.physicsBody, model);
+                const boxFinal = new THREE.Box3().setFromObject(model);
+                const centerFinal = boxFinal.getCenter(new THREE.Vector3());
+                objectData.centerOffset = new THREE.Vector3().subVectors(centerFinal, model.position);
+                objectData.physicsBody.position.set(centerFinal.x, centerFinal.y, centerFinal.z);
+                const meshQuaternion = new THREE.Quaternion().setFromEuler(model.rotation);
+                objectData.physicsBody.quaternion.set(
+                    meshQuaternion.x,
+                    meshQuaternion.y,
+                    meshQuaternion.z,
+                    meshQuaternion.w
+                );
+                objectData.physicsBody.velocity.set(0, 0, 0);
+                objectData.physicsBody.angularVelocity.set(0, 0, 0);
+                objectData.physicsBody.type = this.physicsManager.CANNON.Body.KINEMATIC;
             }
+            
+            setTimeout(() => {
+                if (objectData.physicsBody && objectData.initializing) {
+                    objectData.initializing = false;
+                }
+            }, 100);
             
             if (this.initialState) {
                 this.initialState.set(name, {
