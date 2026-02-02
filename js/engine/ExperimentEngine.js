@@ -407,6 +407,13 @@ export class ExperimentEngine {
     async toggleSpiritLampFire() {
         this.spiritLampFireOn = !this.spiritLampFireOn;
         
+        if (!this.spiritLamp) {
+            const spiritLampObj = this.objects.get('Spirit Lamp');
+            if (spiritLampObj && spiritLampObj.mesh) {
+                this.spiritLamp = spiritLampObj.mesh;
+            }
+        }
+        
         if (this.spiritLampFireOn) {
             if (this.spiritLamp && !this.spiritLampFire) {
                 try {
@@ -1071,9 +1078,7 @@ export class ExperimentEngine {
             return;
         }
         
-        if (lowerName.includes('table') || lowerName.includes('laboratory') || 
-            lowerName.includes('spirit') || lowerName.includes('burner') || 
-            lowerName.includes('electronic') || lowerName.includes('scale')) {
+        if (lowerName.includes('table') || lowerName.includes('laboratory')) {
             console.warn(`Cannot add ${name} as labware`);
             return;
         }
@@ -1116,6 +1121,13 @@ export class ExperimentEngine {
                 modelProps.canPour = true;
                 modelProps.canHeat = false;
                 defaultScale = 2.0;
+            } else if (lowerName.includes('scale') || lowerName.includes('electronic')) {
+                modelProps.isScale = true;
+                defaultScale = 1.0;
+            } else if (lowerName.includes('spirit') || lowerName.includes('lamp')) {
+                defaultScale = 0.2;
+            } else if (lowerName.includes('burner')) {
+                defaultScale = 1.0;
             }
             
             model.scale.set(defaultScale, defaultScale, defaultScale);
@@ -1230,7 +1242,7 @@ export class ExperimentEngine {
                     temperature: 20,
                     contents: [],
                     isContainer: modelProps.isContainer || false,
-                    isScale: false,
+                    isScale: modelProps.isScale || (lowerName.includes('scale') || lowerName.includes('electronic')) || false,
                     capacity: modelProps.capacity || 0,
                     canHeat: modelProps.canHeat !== false,
                     canPour: modelProps.canPour !== false
@@ -1273,6 +1285,10 @@ export class ExperimentEngine {
             
             this.scene.add(model);
             this.objects.set(name, objectData);
+            
+            if (lowerName.includes('spirit') || lowerName.includes('lamp')) {
+                this.spiritLamp = model;
+            }
             
             console.log('Beaker added - Name:', name, 'Objects count:', this.objects.size);
             console.log('Beaker position:', model.position);
@@ -1341,8 +1357,7 @@ export class ExperimentEngine {
         }
         
         const lowerName = name.toLowerCase();
-        if (lowerName.includes('spirit') || lowerName.includes('burner') || 
-            lowerName.includes('electronic') || lowerName.includes('scale')) {
+        if (lowerName.includes('table') || lowerName.includes('laboratory')) {
             console.warn(`Cannot remove ${name}`);
             return;
         }
