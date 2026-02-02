@@ -1078,9 +1078,9 @@
             }
         });
 
-        document.getElementById('lamp-fire-btn').addEventListener('click', () => {
+        document.getElementById('lamp-fire-btn').addEventListener('click', async () => {
             if (engine) {
-                const isOn = engine.toggleSpiritLampFire();
+                const isOn = await engine.toggleSpiritLampFire();
                 const btn = document.getElementById('lamp-fire-btn');
                 if (isOn) {
                     btn.textContent = 'Turn Off Lamp';
