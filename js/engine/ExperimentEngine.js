@@ -1896,8 +1896,7 @@ export class ExperimentEngine {
             }
         }
         
-        if (this.keysPressed.has('j') || this.keysPressed.has('J')) {
-            const cameraUp = new THREE.Vector3(0, 1, 0);
+        if (this.keysPressed.has('k') || this.keysPressed.has('K')) {
             const tiltAxis = cameraRight.clone();
             
             const currentRotation = obj.mesh.rotation.clone();
@@ -1912,9 +1911,38 @@ export class ExperimentEngine {
             obj.mesh.rotation.z = THREE.MathUtils.clamp(newEuler.z, -maxTilt, maxTilt);
         }
         
-        if (this.keysPressed.has('l') || this.keysPressed.has('L')) {
-            const cameraUp = new THREE.Vector3(0, 1, 0);
+        if (this.keysPressed.has('i') || this.keysPressed.has('I')) {
             const tiltAxis = cameraRight.clone();
+            
+            const currentRotation = obj.mesh.rotation.clone();
+            const quaternion = new THREE.Quaternion().setFromEuler(currentRotation);
+            
+            const tiltQuaternion = new THREE.Quaternion().setFromAxisAngle(tiltAxis, -this.keyboardTiltSpeed);
+            quaternion.multiply(tiltQuaternion);
+            
+            const newEuler = new THREE.Euler().setFromQuaternion(quaternion);
+            
+            obj.mesh.rotation.x = THREE.MathUtils.clamp(newEuler.x, -maxTilt, maxTilt);
+            obj.mesh.rotation.z = THREE.MathUtils.clamp(newEuler.z, -maxTilt, maxTilt);
+        }
+        
+        if (this.keysPressed.has('j') || this.keysPressed.has('J')) {
+            const tiltAxis = cameraDirection.clone();
+            
+            const currentRotation = obj.mesh.rotation.clone();
+            const quaternion = new THREE.Quaternion().setFromEuler(currentRotation);
+            
+            const tiltQuaternion = new THREE.Quaternion().setFromAxisAngle(tiltAxis, this.keyboardTiltSpeed);
+            quaternion.multiply(tiltQuaternion);
+            
+            const newEuler = new THREE.Euler().setFromQuaternion(quaternion);
+            
+            obj.mesh.rotation.x = THREE.MathUtils.clamp(newEuler.x, -maxTilt, maxTilt);
+            obj.mesh.rotation.z = THREE.MathUtils.clamp(newEuler.z, -maxTilt, maxTilt);
+        }
+        
+        if (this.keysPressed.has('l') || this.keysPressed.has('L')) {
+            const tiltAxis = cameraDirection.clone();
             
             const currentRotation = obj.mesh.rotation.clone();
             const quaternion = new THREE.Quaternion().setFromEuler(currentRotation);
@@ -2002,7 +2030,7 @@ export class ExperimentEngine {
 
     onKeyDown(event) {
         const key = event.key.toLowerCase();
-        if (['w', 'a', 's', 'd', 'y', 'j', 'h', 'l'].includes(key)) {
+        if (['w', 'a', 's', 'd', 'y', 'i', 'j', 'k', 'h', 'l'].includes(key)) {
             this.keysPressed.add(key);
             event.preventDefault();
         } else if (key === 'u') {
@@ -2015,7 +2043,7 @@ export class ExperimentEngine {
 
     onKeyUp(event) {
         const key = event.key.toLowerCase();
-        if (['w', 'a', 's', 'd', 'y', 'j', 'h', 'l'].includes(key)) {
+        if (['w', 'a', 's', 'd', 'y', 'i', 'j', 'k', 'h', 'l'].includes(key)) {
             this.keysPressed.delete(key);
             event.preventDefault();
         } else if (key === 'u') {
