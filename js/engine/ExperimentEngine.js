@@ -2729,19 +2729,12 @@ export class ExperimentEngine {
             }
         }
         
-        if (intersects.length === 0 && this.objects.size > 0) {
-            for (const [name, obj] of this.objects) {
-                if (obj && obj.mesh && obj.interactions && obj.interactions.draggable) {
-                    const lowerName = name.toLowerCase();
-                    if (lowerName.includes('beaker') || lowerName.includes('flask') || lowerName.includes('bottle')) {
-                        console.log('Fallback: Selecting beaker by name:', name);
-                        this.handleInteractionStart(obj, event);
-                        event.preventDefault();
-                        event.stopPropagation();
-                        return;
-                    }
-                }
+        if (intersects.length === 0) {
+            this.selectObject(null);
+            if (this.controls && !this.controls.enabled) {
+                this.controls.enabled = true;
             }
+            return;
         }
         
         this.selectObject(null);
