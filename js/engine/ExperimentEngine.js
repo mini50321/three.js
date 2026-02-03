@@ -3863,6 +3863,7 @@ export class ExperimentEngine {
         const objCenter = objBox.getCenter(new THREE.Vector3());
         let closest = null;
         let minDistance = Infinity;
+        const maxVerticalDistance = 0.3;
         
         for (const [name, otherObj] of this.objects) {
             if (otherObj === obj || !otherObj.properties.isContainer) continue;
@@ -3877,8 +3878,6 @@ export class ExperimentEngine {
                 Math.pow(objCenter.z - otherCenter.z, 2)
             );
             const verticalDistance = Math.abs(objCenter.y - otherCenter.y);
-            
-            const maxVerticalDistance = 0.3;
             
             if (horizontalDistance < maxDistance && verticalDistance < maxVerticalDistance && horizontalDistance < minDistance) {
                 minDistance = horizontalDistance;
