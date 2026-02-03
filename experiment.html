@@ -543,6 +543,20 @@
         </div>
     </div>
 
+    <div id="notification-modal-overlay" class="modal-overlay" style="display: none; z-index: 10000;">
+        <div class="modal" style="max-width: 400px; padding: 20px;">
+            <div class="modal-header" style="border-bottom: none; padding-bottom: 10px;">
+                <h2 id="notification-title" style="margin: 0; font-size: 20px; color: #4CAF50;">Success</h2>
+            </div>
+            <div class="modal-body" style="padding: 15px 0;">
+                <p id="notification-message" style="margin: 0; color: #fff; font-size: 16px; text-align: center;"></p>
+            </div>
+            <div class="modal-footer" style="border-top: none; padding-top: 15px; justify-content: center;">
+                <button class="modal-btn modal-btn-primary" id="notification-ok-btn" style="min-width: 100px;">OK</button>
+            </div>
+        </div>
+    </div>
+
     <div id="labware-modal-overlay" class="modal-overlay" style="display: none;">
         <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
             <div class="modal-header" style="position: relative;">
@@ -615,6 +629,15 @@
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #fff;">Time (seconds)</label>
                     <input type="number" id="time-input" min="0" value="0" step="1" style="width: 100%; padding: 8px; background: #444; color: #fff; border: 1px solid #555; border-radius: 4px;">
+                </div>
+
+                <div id="glass-rod-controls" style="margin-bottom: 15px; display: none;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #fff;">Glass Rod Controls</label>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="fill-btn" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500;">Fill</button>
+                        <button id="draw-btn" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500;">Draw</button>
+                    </div>
+                    <p style="color: #aaa; font-size: 11px; margin-top: 5px; margin-bottom: 0;">Position the glass rod near a container, then click Fill or Draw</p>
                 </div>
 
                 <div style="margin-top: 15px; padding: 10px; background: #2a2a2a; border-radius: 6px;">
@@ -807,6 +830,23 @@
             document.addEventListener('objectSelected', (e) => {
                 const obj = e.detail.object;
                 updateControlsForObject(obj);
+                
+                const glassRodControls = document.getElementById('glass-rod-controls');
+                
+                if (obj) {
+                    const objName = obj.name.toLowerCase();
+                    const isGlassRod = objName.includes('rod') || objName.includes('glass rod') || objName === 'glass rod';
+                    console.log('Object selected:', obj.name, 'isGlassRod:', isGlassRod);
+                    
+                    if (isGlassRod && glassRodControls) {
+                        glassRodControls.style.display = 'block';
+                        console.log('Glass rod controls shown');
+                    } else if (glassRodControls) {
+                        glassRodControls.style.display = 'none';
+                    }
+                } else {
+                    if (glassRodControls) glassRodControls.style.display = 'none';
+                }
             });
 
             if (temperatureSlider && temperatureValue) {
@@ -951,6 +991,61 @@
                         String(minutes).padStart(2, '0') + ':' + 
                         String(seconds).padStart(2, '0');
                 }
+            }
+
+            const fillBtn = document.getElementById('fill-btn');
+            const drawBtn = document.getElementById('draw-btn');
+            
+            function showNotification(title, message, color = '#4CAF50') {
+                const overlay = document.getElementById('notification-modal-overlay');
+                const titleEl = document.getElementById('notification-title');
+                const messageEl = document.getElementById('notification-message');
+                const okBtn = document.getElementById('notification-ok-btn');
+                
+                if (overlay && titleEl && messageEl) {
+                    titleEl.textContent = title;
+                    titleEl.style.color = color;
+                    messageEl.textContent = message;
+                    overlay.style.display = 'flex';
+                    
+                    if (okBtn) {
+                        okBtn.onclick = () => {
+                            overlay.style.display = 'none';
+                        };
+                    }
+                    
+                    setTimeout(() => {
+                        if (overlay.style.display === 'flex') {
+                            overlay.style.display = 'none';
+                        }
+                    }, 3000);
+                }
+            }
+            
+            if (fillBtn) {
+                fillBtn.addEventListener('click', () => {
+                    if (engine && engine.selectedObject) {
+                        const result = engine.fillFromNearbyContainer(engine.selectedObject);
+                        if (result && result.success) {
+                            showNotification('Filled!', `Successfully filled ${result.amount.toFixed(1)}ml from ${result.source}`, '#4CAF50');
+                        } else if (result && !result.success) {
+                            showNotification('Cannot Fill', result.message || 'No nearby container found', '#f44336');
+                        }
+                    }
+                });
+            }
+            
+            if (drawBtn) {
+                drawBtn.addEventListener('click', () => {
+                    if (engine && engine.selectedObject) {
+                        const result = engine.drawToNearbyContainer(engine.selectedObject);
+                        if (result && result.success) {
+                            showNotification('Drawn!', `Successfully drew ${result.amount.toFixed(1)}ml to ${result.target}`, '#2196F3');
+                        } else if (result && !result.success) {
+                            showNotification('Cannot Draw', result.message || 'No nearby container found', '#f44336');
+                        }
+                    }
+                });
             }
 
             setInterval(() => {

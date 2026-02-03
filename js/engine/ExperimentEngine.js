@@ -1127,6 +1127,12 @@ export class ExperimentEngine {
                 modelProps.canPour = true;
                 modelProps.canHeat = false;
                 defaultScale = 2.0;
+            } else if (lowerName.includes('rod') || lowerName.includes('glass rod')) {
+                modelProps.isContainer = true;
+                modelProps.capacity = 50;
+                modelProps.canPour = false;
+                modelProps.canHeat = false;
+                defaultScale = 1.0;
             } else if (lowerName.includes('scale') || lowerName.includes('electronic')) {
                 modelProps.isScale = true;
                 defaultScale = 1.0;
@@ -2972,7 +2978,16 @@ export class ExperimentEngine {
             return;
         }
         
-        const radius = Math.min(size.x, size.z) * 0.45;
+        const objName = obj.name.toLowerCase();
+        const isRod = objName.includes('rod') || objName.includes('glass rod');
+        
+        let radius;
+        if (isRod) {
+            radius = Math.min(size.x, size.z) * 0.3;
+        } else {
+            radius = Math.min(size.x, size.z) * 0.45;
+        }
+        
         const segments = this.performanceManager.getGeometrySegments();
         
         const geometry = new THREE.CylinderGeometry(radius, radius, liquidHeight, segments);
@@ -2980,7 +2995,7 @@ export class ExperimentEngine {
         const material = new THREE.MeshStandardMaterial({
             color: color,
             transparent: true,
-            opacity: 0.85,
+            opacity: isRod ? 0.9 : 0.85,
             side: THREE.DoubleSide,
             roughness: 0.2,
             metalness: 0.2,
@@ -2991,8 +3006,15 @@ export class ExperimentEngine {
         
         const containerCenter = box.getCenter(new THREE.Vector3());
         const containerBottom = minYWorld;
-        const liquidBottom = containerBottom + (size.y * 0.05);
-        const liquidCenterY = liquidBottom + liquidHeight / 2;
+        let liquidBottom, liquidCenterY;
+        
+        if (isRod) {
+            liquidBottom = containerBottom + (size.y * 0.1);
+            liquidCenterY = liquidBottom + liquidHeight / 2;
+        } else {
+            liquidBottom = containerBottom + (size.y * 0.05);
+            liquidCenterY = liquidBottom + liquidHeight / 2;
+        }
         
         liquidMesh.position.set(containerCenter.x, liquidCenterY, containerCenter.z);
         liquidMesh.userData.isLiquid = true;
@@ -3037,7 +3059,15 @@ export class ExperimentEngine {
         
         const size = box.getSize(new THREE.Vector3());
         const minYWorld = box.min.y;
-        const radius = Math.min(size.x, size.z) * 0.45;
+        const objName = obj.name.toLowerCase();
+        const isRod = objName.includes('rod') || objName.includes('glass rod');
+        
+        let radius;
+        if (isRod) {
+            radius = Math.min(size.x, size.z) * 0.3;
+        } else {
+            radius = Math.min(size.x, size.z) * 0.45;
+        }
         
         const currentHeight = liquidMesh.geometry.parameters.height;
         if (Math.abs(currentHeight - liquidHeight) > 0.01) {
@@ -3048,14 +3078,21 @@ export class ExperimentEngine {
         
         const containerCenter = box.getCenter(new THREE.Vector3());
         const containerBottom = minYWorld;
-        const liquidBottom = containerBottom + (size.y * 0.05);
-        const liquidCenterY = liquidBottom + liquidHeight / 2;
+        let liquidBottom, liquidCenterY;
+        
+        if (isRod) {
+            liquidBottom = containerBottom + (size.y * 0.1);
+            liquidCenterY = liquidBottom + liquidHeight / 2;
+        } else {
+            liquidBottom = containerBottom + (size.y * 0.05);
+            liquidCenterY = liquidBottom + liquidHeight / 2;
+        }
         
         liquidMesh.position.set(containerCenter.x, liquidCenterY, containerCenter.z);
         
         const color = this.getLiquidColor(obj);
         liquidMesh.material.color.copy(color);
-        liquidMesh.material.opacity = 0.85;
+        liquidMesh.material.opacity = isRod ? 0.9 : 0.85;
         
         liquidMesh.rotation.copy(obj.mesh.rotation);
         liquidMesh.renderOrder = 1;
@@ -3815,6 +3852,189 @@ export class ExperimentEngine {
         if (this.renderer) {
             this.container.removeChild(this.renderer.domElement);
             this.renderer.dispose();
+        }
+    }
+
+    findNearbyContainer(obj, maxDistance = 0.5) {
+        if (!obj || !obj.mesh) return null;
+        
+        obj.mesh.updateMatrixWorld(true);
+        const objBox = new THREE.Box3().setFromObject(obj.mesh);
+        const objCenter = objBox.getCenter(new THREE.Vector3());
+        let closest = null;
+        let minDistance = Infinity;
+        
+        for (const [name, otherObj] of this.objects) {
+            if (otherObj === obj || !otherObj.properties.isContainer) continue;
+            if (!otherObj.mesh) continue;
+            
+            otherObj.mesh.updateMatrixWorld(true);
+            const otherBox = new THREE.Box3().setFromObject(otherObj.mesh);
+            const otherCenter = otherBox.getCenter(new THREE.Vector3());
+            
+            const horizontalDistance = Math.sqrt(
+                Math.pow(objCenter.x - otherCenter.x, 2) + 
+                Math.pow(objCenter.z - otherCenter.z, 2)
+            );
+            const verticalDistance = Math.abs(objCenter.y - otherCenter.y);
+            
+            const maxVerticalDistance = 0.3;
+            
+            if (horizontalDistance < maxDistance && verticalDistance < maxVerticalDistance && horizontalDistance < minDistance) {
+                minDistance = horizontalDistance;
+                closest = otherObj;
+            }
+        }
+        
+        if (closest) {
+            console.log(`Found nearby container: ${closest.name} at distance ${minDistance.toFixed(3)}m`);
+        } else {
+            console.log(`No nearby container found within ${maxDistance}m horizontal and ${maxVerticalDistance}m vertical`);
+        }
+        
+        return closest;
+    }
+
+    fillFromNearbyContainer(rodObj) {
+        if (!rodObj || !rodObj.properties.isContainer) {
+            console.log('Selected object is not a container');
+            return { success: false, message: 'Selected object is not a container' };
+        }
+        
+        const nearbyContainer = this.findNearbyContainer(rodObj);
+        if (!nearbyContainer) {
+            console.log('No nearby container found');
+            return { success: false, message: 'No nearby container found. Position the glass rod closer to a container.' };
+        }
+        
+        if (nearbyContainer.properties.contents.length === 0) {
+            console.log('Nearby container has no liquid');
+            return { success: false, message: 'The nearby container has no liquid to transfer.' };
+        }
+        
+        const transferAmount = 50;
+        const sourceContent = nearbyContainer.properties.contents[0];
+        const transferVolume = Math.min(transferAmount, sourceContent.volume);
+        
+        if (transferVolume <= 0) {
+            return { success: false, message: 'No liquid available to transfer.' };
+        }
+        
+        sourceContent.volume -= transferVolume;
+        if (sourceContent.volume <= 0) {
+            nearbyContainer.properties.contents.shift();
+        }
+        
+        const rodCapacity = rodObj.properties.capacity || 100;
+        const currentRodVolume = this.calculateVolume(rodObj);
+        const availableSpace = rodCapacity - currentRodVolume;
+        const actualTransfer = Math.min(transferVolume, availableSpace);
+        
+        if (actualTransfer > 0) {
+            const existingContent = rodObj.properties.contents.find(c => c.type === sourceContent.type);
+            if (existingContent) {
+                existingContent.volume += actualTransfer;
+            } else {
+                rodObj.properties.contents.push({
+                    type: sourceContent.type,
+                    volume: actualTransfer
+                });
+            }
+            
+            if (sourceContent.volume < transferVolume) {
+                sourceContent.volume += (transferVolume - actualTransfer);
+            }
+            
+            this.measurements.volume[rodObj.name] = this.calculateVolume(rodObj);
+            this.measurements.volume[nearbyContainer.name] = this.calculateVolume(nearbyContainer);
+            
+            rodObj.properties.volume = this.calculateVolume(rodObj);
+            
+            if (this.updateLiquidMesh) {
+                this.updateLiquidMesh(rodObj);
+                this.updateLiquidMesh(nearbyContainer);
+            }
+            
+            this.updateMeasurements(rodObj);
+            this.updateMeasurements(nearbyContainer);
+            
+            console.log(`Filled ${rodObj.name} with ${actualTransfer.toFixed(1)}ml from ${nearbyContainer.name}`);
+            return { success: true, amount: actualTransfer, source: nearbyContainer.name };
+        } else {
+            return { success: false, message: 'Glass rod is full or no space available.' };
+        }
+    }
+
+    drawToNearbyContainer(rodObj) {
+        if (!rodObj || !rodObj.properties.isContainer) {
+            console.log('Selected object is not a container');
+            return { success: false, message: 'Selected object is not a container' };
+        }
+        
+        if (rodObj.properties.contents.length === 0) {
+            console.log('Glass rod has no liquid');
+            return { success: false, message: 'Glass rod has no liquid to transfer.' };
+        }
+        
+        const nearbyContainer = this.findNearbyContainer(rodObj);
+        if (!nearbyContainer) {
+            console.log('No nearby container found');
+            return { success: false, message: 'No nearby container found. Position the glass rod closer to a container.' };
+        }
+        
+        const transferAmount = 50;
+        const rodContent = rodObj.properties.contents[0];
+        const transferVolume = Math.min(transferAmount, rodContent.volume);
+        
+        if (transferVolume <= 0) {
+            return { success: false, message: 'No liquid available to transfer.' };
+        }
+        
+        const containerCapacity = nearbyContainer.properties.capacity || 1000;
+        const currentContainerVolume = this.calculateVolume(nearbyContainer);
+        const availableSpace = containerCapacity - currentContainerVolume;
+        const actualTransfer = Math.min(transferVolume, availableSpace);
+        
+        if (actualTransfer > 0) {
+            rodContent.volume -= actualTransfer;
+            if (rodContent.volume <= 0) {
+                rodObj.properties.contents.shift();
+            }
+            
+            const existingContent = nearbyContainer.properties.contents.find(c => c.type === rodContent.type);
+            if (existingContent) {
+                existingContent.volume += actualTransfer;
+            } else {
+                nearbyContainer.properties.contents.push({
+                    type: rodContent.type,
+                    volume: actualTransfer
+                });
+            }
+            
+            this.measurements.volume[rodObj.name] = this.calculateVolume(rodObj);
+            this.measurements.volume[nearbyContainer.name] = this.calculateVolume(nearbyContainer);
+            
+            rodObj.properties.volume = this.calculateVolume(rodObj);
+            
+            if (this.updateLiquidMesh) {
+                this.updateLiquidMesh(rodObj);
+                this.updateLiquidMesh(nearbyContainer);
+            }
+            
+            this.updateMeasurements(rodObj);
+            this.updateMeasurements(nearbyContainer);
+            
+            if (this.checkChemicalReaction) {
+                const reaction = this.checkChemicalReaction(nearbyContainer);
+                if (reaction) {
+                    this.processChemicalReaction(nearbyContainer, reaction);
+                }
+            }
+            
+            console.log(`Drew ${actualTransfer.toFixed(1)}ml from ${rodObj.name} to ${nearbyContainer.name}`);
+            return { success: true, amount: actualTransfer, target: nearbyContainer.name };
+        } else {
+            return { success: false, message: 'Target container is full or no space available.' };
         }
     }
 }
