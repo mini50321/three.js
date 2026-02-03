@@ -59,6 +59,8 @@ export class ExperimentEngine {
         this.spiritLampFire = null;
         this.isDraggingLabware = false;
         this.pendingDragObject = null;
+        this.pendingTiltObject = null;
+        this.pendingPourObject = null;
         this.mouseDownPosition = null;
         
         this.init();
@@ -1574,6 +1576,30 @@ export class ExperimentEngine {
             const objectList = Array.from(this.objects.entries());
             
             for (const [name, obj] of objectList) {
+                if (obj.userData && obj.userData.isInsideBurnerStand) {
+                    const burnerStandObj = this.objects.get('Burner Stand');
+                    if (burnerStandObj && burnerStandObj.mesh) {
+                        const burnerMesh = this.burnerStand || burnerStandObj.mesh;
+                        burnerMesh.updateMatrixWorld(true);
+                        obj.mesh.updateMatrixWorld(true);
+                        
+                        const burnerBox = new THREE.Box3().setFromObject(burnerMesh);
+                        const burnerCenter = burnerBox.getCenter(new THREE.Vector3());
+                        const burnerSize = burnerBox.getSize(new THREE.Vector3());
+                        const burnerBottom = burnerBox.min.y;
+                        
+                        const lampBox = new THREE.Box3().setFromObject(obj.mesh);
+                        const lampSize = lampBox.getSize(new THREE.Vector3());
+                        const targetY = burnerBottom + (burnerSize.y * 0.02) + (lampSize.y * 0.05);
+                        
+                        obj.mesh.position.x = burnerCenter.x;
+                        obj.mesh.position.z = burnerCenter.z;
+                        obj.mesh.position.y = targetY;
+                        obj.mesh.updateMatrixWorld(true);
+                    }
+                    continue;
+                }
+                
                 if (obj.physicsBody) {
                     if (!this.isObjectBeingDragged(obj) && !obj.justReleased && !obj.initializing) {
                         if (obj.physicsBody.type === this.physicsManager.CANNON.Body.DYNAMIC) {
@@ -1928,6 +1954,10 @@ export class ExperimentEngine {
     constrainToTable(obj) {
         if (!this.tableBounds || !obj.interactions.draggable) return;
         
+        if (obj.userData && obj.userData.isInsideBurnerStand) {
+            return;
+        }
+        
         obj.mesh.updateMatrixWorld(true);
         const box = new THREE.Box3().setFromObject(obj.mesh);
         const size = box.getSize(new THREE.Vector3());
@@ -2025,7 +2055,34 @@ export class ExperimentEngine {
 
     isObjectOnBurnerStand(obj) {
         if (!obj || !obj.mesh || !this.burnerStand) return false;
-        if (obj.name === 'Spirit Lamp' || obj.name === 'Burner Stand') return false;
+        const objName = obj.name.toLowerCase();
+        if ((obj.name === 'Spirit Lamp' || obj.name === 'Alcohol Lamp' || objName.includes('spirit lamp') || objName.includes('alcohol lamp')) && !obj.userData?.isInsideBurnerStand) {
+            obj.mesh.updateMatrixWorld(true);
+            this.burnerStand.updateMatrixWorld(true);
+            
+            const burnerBox = new THREE.Box3().setFromObject(this.burnerStand);
+            const objBox = new THREE.Box3().setFromObject(obj.mesh);
+            
+            const burnerTop = burnerBox.max.y;
+            const burnerCenter = burnerBox.getCenter(new THREE.Vector3());
+            const objBottom = objBox.min.y;
+            const objCenter = objBox.getCenter(new THREE.Vector3());
+            
+            const burnerSize = burnerBox.getSize(new THREE.Vector3());
+            const horizontalDistance = Math.sqrt(
+                Math.pow(objCenter.x - burnerCenter.x, 2) + 
+                Math.pow(objCenter.z - burnerCenter.z, 2)
+            );
+            
+            const maxHorizontalDistance = Math.max(burnerSize.x, burnerSize.z) * 0.6;
+            const verticalDistance = objBottom - burnerTop;
+            const maxVerticalDistance = 0.1;
+            
+            return horizontalDistance < maxHorizontalDistance && 
+                   verticalDistance >= -maxVerticalDistance && 
+                   verticalDistance <= maxVerticalDistance;
+        }
+        if (obj.name === 'Spirit Lamp' || obj.name === 'Alcohol Lamp' || obj.name === 'Burner Stand') return false;
         
         obj.mesh.updateMatrixWorld(true);
         this.burnerStand.updateMatrixWorld(true);
@@ -2055,13 +2112,51 @@ export class ExperimentEngine {
     constrainToBurnerStand(obj) {
         if (!this.burnerStand || !obj.interactions.draggable) return;
         
+        const lowerName = obj.name.toLowerCase();
+        if (lowerName.includes('spirit') || lowerName.includes('alcohol') || (lowerName.includes('lamp') && !lowerName.includes('beaker'))) {
+            if (obj.mesh.userData.isInsideBurnerStand) {
+                const burnerStandObj = this.objects.get('Burner Stand');
+                if (burnerStandObj && burnerStandObj.mesh) {
+                    const burnerMesh = this.burnerStand || burnerStandObj.mesh;
+                    burnerMesh.updateMatrixWorld(true);
+                    obj.mesh.updateMatrixWorld(true);
+                    
+                        const burnerBox = new THREE.Box3().setFromObject(burnerMesh);
+                        const burnerCenter = burnerBox.getCenter(new THREE.Vector3());
+                        const burnerSize = burnerBox.getSize(new THREE.Vector3());
+                        const burnerBottom = burnerBox.min.y;
+                        
+                        const lampBox = new THREE.Box3().setFromObject(obj.mesh);
+                        const lampSize = lampBox.getSize(new THREE.Vector3());
+                        const targetY = burnerBottom + (burnerSize.y * 0.02) + (lampSize.y * 0.05);
+                        
+                        obj.mesh.position.x = burnerCenter.x;
+                        obj.mesh.position.z = burnerCenter.z;
+                        obj.mesh.position.y = targetY;
+                        obj.mesh.updateMatrixWorld(true);
+                    
+                    if (obj.physicsBody && this.physicsManager) {
+                        const targetPos = new THREE.Vector3(burnerCenter.x, targetY, burnerCenter.z);
+                        obj.physicsBody.type = this.physicsManager.CANNON.Body.KINEMATIC;
+                        this.physicsManager.setBodyPosition(obj.physicsBody, targetPos);
+                        obj.physicsBody.velocity.set(0, 0, 0);
+                        obj.physicsBody.angularVelocity.set(0, 0, 0);
+                    }
+                }
+                return;
+            }
+        }
+        
         const burnerStandObj = this.objects.get('Burner Stand');
         if (!burnerStandObj) return;
         
-        this.burnerStand.updateMatrixWorld(true);
+        const burnerMesh = this.burnerStand || burnerStandObj.mesh;
+        if (!burnerMesh) return;
+        
+        burnerMesh.updateMatrixWorld(true);
         obj.mesh.updateMatrixWorld(true);
         
-        const burnerBox = new THREE.Box3().setFromObject(this.burnerStand);
+        const burnerBox = new THREE.Box3().setFromObject(burnerMesh);
         const burnerCenter = burnerBox.getCenter(new THREE.Vector3());
         const burnerTop = burnerBox.max.y;
         const burnerSize = burnerBox.getSize(new THREE.Vector3());
@@ -2078,18 +2173,22 @@ export class ExperimentEngine {
         const maxHorizontalDistance = Math.min(burnerSize.x, burnerSize.z) * 0.4;
         
         if (horizontalDistance < maxHorizontalDistance) {
-            if (obj.name === 'Spirit Lamp') {
+            if (lowerName.includes('spirit') || lowerName.includes('alcohol') || (lowerName.includes('lamp') && !lowerName.includes('beaker'))) {
+                const burnerBottom = burnerBox.min.y;
+                const targetY = burnerBottom + (burnerSize.y * 0.3) + (objSize.y * 0.5);
                 const maxVerticalDistance = burnerSize.y * 0.4;
                 const verticalDistance = Math.abs(objCenter.y - burnerCenter.y);
                 
                 if (verticalDistance < maxVerticalDistance) {
                     obj.mesh.position.x = burnerCenter.x;
                     obj.mesh.position.z = burnerCenter.z;
-                    obj.mesh.position.y = burnerCenter.y;
+                    obj.mesh.position.y = targetY;
                     obj.mesh.updateMatrixWorld(true);
                     
                     if (obj.physicsBody && this.physicsManager) {
-                        this.physicsManager.setBodyPosition(obj.physicsBody, burnerCenter);
+                        const targetPos = new THREE.Vector3(burnerCenter.x, targetY, burnerCenter.z);
+                        obj.physicsBody.type = this.physicsManager.CANNON.Body.KINEMATIC;
+                        this.physicsManager.setBodyPosition(obj.physicsBody, targetPos);
                         obj.physicsBody.velocity.set(0, 0, 0);
                         obj.physicsBody.angularVelocity.set(0, 0, 0);
                     }
@@ -2140,16 +2239,47 @@ export class ExperimentEngine {
         
         const burnerBox = new THREE.Box3().setFromObject(burnerMesh);
         const burnerCenter = burnerBox.getCenter(new THREE.Vector3());
+        const burnerSize = burnerBox.getSize(new THREE.Vector3());
+        const burnerBottom = burnerBox.min.y;
+        const burnerTop = burnerBox.max.y;
         
-        console.log('Moving spirit lamp to burner center:', burnerCenter);
+        const lampBox = new THREE.Box3().setFromObject(spiritLampObj.mesh);
+        const lampSize = lampBox.getSize(new THREE.Vector3());
         
-        spiritLampObj.mesh.position.x = burnerCenter.x;
-        spiritLampObj.mesh.position.z = burnerCenter.z;
-        spiritLampObj.mesh.position.y = burnerCenter.y;
+        const targetY = burnerBottom + (burnerSize.y * 0.02) + (lampSize.y * 0.05);
+        
+        console.log('Burner box:', { bottom: burnerBottom, top: burnerTop, center: burnerCenter.y, size: burnerSize });
+        console.log('Lamp size:', lampSize);
+        console.log('Calculated targetY:', targetY, 'which is', ((targetY - burnerBottom) / burnerSize.y * 100).toFixed(1) + '% up from bottom');
+        
+        console.log('Moving spirit lamp INSIDE burner - center:', burnerCenter, 'bottom:', burnerBottom, 'targetY:', targetY);
+        
+        const targetPosition = new THREE.Vector3(burnerCenter.x, targetY, burnerCenter.z);
+        
+        spiritLampObj.mesh.position.x = targetPosition.x;
+        spiritLampObj.mesh.position.z = targetPosition.z;
+        spiritLampObj.mesh.position.y = targetPosition.y;
         spiritLampObj.mesh.updateMatrixWorld(true);
         
-        if (spiritLampObj.physicsBody && this.physicsManager) {
-            this.physicsManager.setBodyPosition(spiritLampObj.physicsBody, burnerCenter);
+        if (!spiritLampObj.mesh.userData) {
+            spiritLampObj.mesh.userData = {};
+        }
+        if (!spiritLampObj.userData) {
+            spiritLampObj.userData = {};
+        }
+        spiritLampObj.mesh.userData.isInsideBurnerStand = true;
+        spiritLampObj.userData.isInsideBurnerStand = true;
+        
+        if (spiritLampObj.physicsBody && this.physicsManager && this.physicsManager.world) {
+            const world = this.physicsManager.world;
+            
+            if (world.bodies && world.bodies.includes(spiritLampObj.physicsBody)) {
+                world.removeBody(spiritLampObj.physicsBody);
+                console.log('Removed spirit lamp from physics world to prevent collision');
+            }
+            
+            spiritLampObj.physicsBody.type = this.physicsManager.CANNON.Body.KINEMATIC;
+            spiritLampObj.physicsBody.position.set(targetPosition.x, targetPosition.y, targetPosition.z);
             spiritLampObj.physicsBody.velocity.set(0, 0, 0);
             spiritLampObj.physicsBody.angularVelocity.set(0, 0, 0);
         }
@@ -2199,16 +2329,27 @@ export class ExperimentEngine {
         const burnerCenter = burnerBox.getCenter(new THREE.Vector3());
         const burnerTop = burnerBox.max.y;
         
-        const objBox = new THREE.Box3().setFromObject(obj.mesh);
-        const objSize = objBox.getSize(new THREE.Vector3());
-        const targetY = burnerTop + objSize.y / 2;
-        
-        console.log('Moving object to burner top - center:', burnerCenter, 'top:', burnerTop, 'targetY:', targetY);
-        
         obj.mesh.position.x = burnerCenter.x;
         obj.mesh.position.z = burnerCenter.z;
+        obj.mesh.updateMatrixWorld(true);
+        
+        const objBox = new THREE.Box3().setFromObject(obj.mesh);
+        const objBottom = objBox.min.y;
+        const currentPositionY = obj.mesh.position.y;
+        
+        const offsetFromPivotToBottom = currentPositionY - objBottom;
+        const targetY = burnerTop + offsetFromPivotToBottom;
+        
+        console.log('Moving object to burner top - center:', burnerCenter, 'top:', burnerTop);
+        console.log('Object bottom:', objBottom, 'Current pivot position:', currentPositionY);
+        console.log('Offset from pivot to bottom:', offsetFromPivotToBottom, 'Target Y:', targetY);
+        
         obj.mesh.position.y = targetY;
         obj.mesh.updateMatrixWorld(true);
+        
+        const verifyBox = new THREE.Box3().setFromObject(obj.mesh);
+        const verifyBottom = verifyBox.min.y;
+        console.log('After placement - Object bottom:', verifyBottom, 'Burner top:', burnerTop, 'Difference:', (verifyBottom - burnerTop).toFixed(4));
         
         if (obj.physicsBody && this.physicsManager) {
             const newCenter = new THREE.Vector3(burnerCenter.x, targetY, burnerCenter.z);
@@ -2978,24 +3119,58 @@ export class ExperimentEngine {
         this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         
-        if (this.pendingDragObject && !this.activeController && this.mouseDownPosition) {
+        if (this.mouseDownPosition) {
             const moveDistance = Math.sqrt(
                 Math.pow(event.clientX - this.mouseDownPosition.x, 2) + 
                 Math.pow(event.clientY - this.mouseDownPosition.y, 2)
             );
             
             if (moveDistance > 5) {
-                const obj = this.pendingDragObject;
-                const dragController = this.interactions.get('drag');
-                if (dragController && obj.interactions.draggable) {
-                    if (this.controls) {
-                        this.controls.enabled = false;
+                if (this.pendingDragObject && !this.activeController) {
+                    const obj = this.pendingDragObject;
+                    const dragController = this.interactions.get('drag');
+                    if (dragController && obj.interactions.draggable) {
+                        if (this.controls) {
+                            this.controls.enabled = false;
+                        }
+                        this.activeController = dragController;
+                        dragController.start(obj, event);
+                        this.pendingDragObject = null;
+                        this.pendingTiltObject = null;
+                        this.mouseDownPosition = null;
+                        console.log('Drag started on move for:', obj.name);
                     }
-                    this.activeController = dragController;
-                    dragController.start(obj, event);
-                    this.pendingDragObject = null;
-                    this.mouseDownPosition = null;
-                    console.log('Drag started on move for:', obj.name);
+                } else if (this.pendingTiltObject && !this.activeController) {
+                    const obj = this.pendingTiltObject;
+                    const tiltController = this.interactions.get('tilt');
+                    if (tiltController && obj.interactions.tiltable) {
+                        if (this.controls) {
+                            this.controls.enabled = false;
+                        }
+                        this.activeController = tiltController;
+                        tiltController.start(obj, event);
+                        this.pendingDragObject = null;
+                        this.pendingTiltObject = null;
+                        this.pendingPourObject = null;
+                        this.mouseDownPosition = null;
+                        console.log('Tilt started on move for:', obj.name);
+                    }
+                } else if (this.pendingPourObject && !this.activeController) {
+                    const obj = this.pendingPourObject;
+                    const pourController = this.interactions.get('pour');
+                    const canPour = (obj.interactions.canPour || obj.properties.canPour) && obj.properties.isContainer;
+                    if (pourController && canPour) {
+                        if (this.controls) {
+                            this.controls.enabled = false;
+                        }
+                        this.activeController = pourController;
+                        pourController.start(obj, event);
+                        this.pendingDragObject = null;
+                        this.pendingTiltObject = null;
+                        this.pendingPourObject = null;
+                        this.mouseDownPosition = null;
+                        console.log('Pour started on move for:', obj.name);
+                    }
                 }
             }
         }
@@ -3007,8 +3182,10 @@ export class ExperimentEngine {
     }
 
     onMouseUp(event) {
-        if (this.pendingDragObject && !this.activeController) {
+        if ((this.pendingDragObject || this.pendingTiltObject || this.pendingPourObject) && !this.activeController) {
             this.pendingDragObject = null;
+            this.pendingTiltObject = null;
+            this.pendingPourObject = null;
             this.mouseDownPosition = null;
         }
         
@@ -3118,32 +3295,68 @@ export class ExperimentEngine {
             return;
         }
         
+        const objName = obj.name.toLowerCase();
+        const isSpiritLampObj = objName === 'spirit lamp' || 
+                               obj.name === 'Spirit Lamp' ||
+                               obj.name === 'Alcohol Lamp' ||
+                               objName.includes('spirit lamp') || 
+                               objName.includes('alcohol lamp') ||
+                               (objName.includes('lamp') && !objName.includes('beaker') && !objName.includes('burner') && !objName.includes('stand'));
+        
+        if (isSpiritLampObj && !obj.userData?.isInsideBurnerStand && this.isObjectOnBurnerStand(obj)) {
+            console.log('Spirit lamp is on burner stand, placing it INSIDE');
+            this.placeSpiritLampInBurnerStand(obj);
+            this.selectObject(null);
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+        
         if (this.selectedObject && this.selectedObject !== obj) {
             const selectedObj = this.selectedObject;
             const clickedName = obj.name.toLowerCase();
             const selectedName = selectedObj.name.toLowerCase();
+            const selectedFullName = selectedObj.name;
             
-            console.log('Checking sequential placement - Selected:', selectedName, 'Clicked:', clickedName);
+            console.log('Checking sequential placement - Selected:', selectedName, 'Full name:', selectedFullName, 'Clicked:', clickedName);
             
             if (clickedName.includes('burner') && clickedName.includes('stand')) {
-                console.log('Burner stand clicked with object selected:', selectedName);
+                console.log('Burner stand clicked with object selected:', selectedName, 'Full name:', selectedFullName);
                 
-                if (selectedName.includes('spirit') || selectedName.includes('alcohol') || 
-                    (selectedName.includes('lamp') && !selectedName.includes('beaker'))) {
-                    console.log('Placing spirit lamp in burner stand');
+                const isSpiritLamp = selectedName === 'spirit lamp' || 
+                                     selectedName === 'alcohol lamp' ||
+                                     selectedFullName === 'Spirit Lamp' ||
+                                     selectedFullName === 'Alcohol Lamp' ||
+                                     selectedName.includes('spirit lamp') || 
+                                     selectedName.includes('alcohol lamp') ||
+                                     (selectedName.includes('lamp') && !selectedName.includes('beaker') && !selectedName.includes('burner') && !selectedName.includes('stand'));
+                
+                console.log('isSpiritLamp check:', isSpiritLamp, 'selectedName:', selectedName, 'selectedFullName:', selectedFullName);
+                
+                if (isSpiritLamp) {
+                    console.log('Placing spirit lamp INSIDE burner stand (sequential selection)');
                     this.placeSpiritLampInBurnerStand(selectedObj);
                     this.selectObject(null);
                     event.preventDefault();
                     event.stopPropagation();
                     return;
-                } else if (selectedObj.properties && selectedObj.properties.isContainer && !selectedName.includes('burner')) {
-                    console.log('Placing container on burner stand:', selectedName);
+                }
+                
+                const isAnyLamp = selectedName.includes('lamp') && !selectedName.includes('beaker');
+                if (selectedObj.properties && selectedObj.properties.isContainer && 
+                    !selectedName.includes('burner') && 
+                    !selectedName.includes('spirit') && 
+                    !selectedName.includes('alcohol') &&
+                    !isAnyLamp) {
+                    console.log('Placing container ON TOP of burner stand:', selectedName);
                     this.placeObjectOnBurnerStand(selectedObj);
                     this.selectObject(null);
                     event.preventDefault();
                     event.stopPropagation();
                     return;
                 }
+                
+                console.log('Object does not match placement criteria - isSpiritLamp:', isSpiritLamp, 'isAnyLamp:', isAnyLamp, 'isContainer:', selectedObj.properties?.isContainer, 'name:', selectedFullName);
             }
         }
         
@@ -3163,34 +3376,21 @@ export class ExperimentEngine {
             console.log('Object clicked, waiting for mouse move to start drag:', obj.name);
         }
         
-        if (obj.interactions.tiltable) {
-            const tiltController = this.interactions.get('tilt');
-            if (tiltController) {
-                if (this.controls) {
-                    this.controls.enabled = false;
-                }
-                this.activeController = tiltController;
-                tiltController.start(obj, event);
-                console.log('Tilt started for:', obj.name);
-                return;
-            } else {
-                console.error('Tilt controller not found!');
+        if (obj.interactions.tiltable && !previousSelected) {
+            this.pendingTiltObject = obj;
+            if (!this.mouseDownPosition) {
+                this.mouseDownPosition = { x: event.clientX, y: event.clientY };
             }
+            console.log('Object clicked, waiting for mouse move to start tilt:', obj.name);
         }
         
-        if (canPour) {
-            const pourController = this.interactions.get('pour');
-            if (pourController) {
-                if (this.controls) {
-                    this.controls.enabled = false;
-                }
-                this.activeController = pourController;
-                pourController.start(obj, event);
-                console.log('Pour started for:', obj.name);
-                return;
-            } else {
-                console.error('Pour controller not found!');
+        const canPour = (obj.interactions.canPour || obj.properties.canPour) && obj.properties.isContainer;
+        if (canPour && !previousSelected) {
+            this.pendingPourObject = obj;
+            if (!this.mouseDownPosition) {
+                this.mouseDownPosition = { x: event.clientX, y: event.clientY };
             }
+            console.log('Object clicked, waiting for mouse move to start pour:', obj.name);
         }
     }
 
