@@ -26,6 +26,9 @@ export class ExperimentEngine {
         this.selectedObject = null;
         this.keyboardTiltSpeed = 0.005;
         this.keysPressed = new Set();
+        this.isSwirling = false;
+        this.swirlSpeed = 0.15;
+        this.swirlTiltAmount = 0.1;
         this.laboratory = null;
         this.tableSurface = null;
         this.tableBounds = null;
@@ -61,6 +64,7 @@ export class ExperimentEngine {
         this.pendingDragObject = null;
         this.pendingTiltObject = null;
         this.pendingPourObject = null;
+        this.pendingStirObject = null;
         this.mouseDownPosition = null;
         
         this.init();
@@ -845,7 +849,8 @@ export class ExperimentEngine {
                         draggable: modelProps.draggable !== false,
                         tiltable: modelProps.tiltable !== false,
                         heatable: modelProps.canHeat !== false,
-                        canPour: modelProps.canPour !== false
+                        canPour: modelProps.canPour !== false,
+                        stirable: modelProps.stirable !== false
                     },
                     initialState: {
                         volume: initialVolume,
@@ -1792,6 +1797,7 @@ export class ExperimentEngine {
         
         this.updateParticles();
         this.handleKeyboardTilt();
+        this.handleSwirling();
         this.handleCollisions();
     }
     
@@ -1874,12 +1880,12 @@ export class ExperimentEngine {
             moved = true;
         }
         
-        if (this.keysPressed.has('i') || this.keysPressed.has('I')) {
+        if (this.keysPressed.has('y') || this.keysPressed.has('Y')) {
             obj.mesh.position.y += verticalSpeed;
             moved = true;
         }
         
-        if (this.keysPressed.has('k') || this.keysPressed.has('K')) {
+        if (this.keysPressed.has('h') || this.keysPressed.has('H')) {
             const tableTopY = this.tableBounds ? this.tableBounds.y : 0;
             const box = new THREE.Box3().setFromObject(obj.mesh);
             const minY = box.min.y;
@@ -1972,18 +1978,53 @@ export class ExperimentEngine {
         this.constrainToTable(obj);
     }
 
+    handleSwirling() {
+        if (!this.isSwirling || !this.selectedObject) return;
+        
+        const obj = this.selectedObject;
+        
+        if (!obj.mesh.userData.originalRotation) {
+            obj.mesh.userData.originalRotation = {
+                x: obj.mesh.rotation.x,
+                y: obj.mesh.rotation.y,
+                z: obj.mesh.rotation.z
+            };
+        }
+        
+        obj.mesh.rotation.y += this.swirlSpeed;
+        
+        const time = performance.now() * 0.001;
+        obj.mesh.rotation.x = obj.mesh.userData.originalRotation.x + Math.sin(time * 2) * this.swirlTiltAmount;
+        obj.mesh.rotation.z = obj.mesh.userData.originalRotation.z + Math.cos(time * 2) * this.swirlTiltAmount;
+        
+        obj.mesh.updateMatrixWorld(true);
+    }
+
     onKeyDown(event) {
         const key = event.key.toLowerCase();
-        if (['w', 'a', 's', 'd', 'i', 'j', 'k', 'l'].includes(key)) {
+        if (['w', 'a', 's', 'd', 'y', 'j', 'h', 'l'].includes(key)) {
             this.keysPressed.add(key);
             event.preventDefault();
+        } else if (key === 'u') {
+            if (this.selectedObject) {
+                this.isSwirling = true;
+                event.preventDefault();
+            }
         }
     }
 
     onKeyUp(event) {
         const key = event.key.toLowerCase();
-        if (['w', 'a', 's', 'd', 'i', 'j', 'k', 'l'].includes(key)) {
+        if (['w', 'a', 's', 'd', 'y', 'j', 'h', 'l'].includes(key)) {
             this.keysPressed.delete(key);
+            event.preventDefault();
+        } else if (key === 'u') {
+            this.isSwirling = false;
+            if (this.selectedObject) {
+                const obj = this.selectedObject;
+                obj.mesh.rotation.x = obj.mesh.userData.originalRotation?.x || 0;
+                obj.mesh.rotation.z = obj.mesh.userData.originalRotation?.z || 0;
+            }
             event.preventDefault();
         }
     }
@@ -3031,16 +3072,20 @@ export class ExperimentEngine {
         if (!obj.properties.isContainer) return;
         
         const volume = this.calculateVolume(obj);
+        const hasContents = obj.properties.contents && obj.properties.contents.length > 0 && obj.properties.contents.some(c => c.volume > 0.001);
         const liquidHeight = this.calculateLiquidHeight(obj, volume);
         
         const liquidMesh = this.liquidMeshes.get(obj.name);
         
-        if (liquidHeight <= 0 || volume <= 0) {
+        if (liquidHeight <= 0 || volume <= 0 || !hasContents) {
             if (liquidMesh) {
                 this.scene.remove(liquidMesh);
                 liquidMesh.geometry.dispose();
                 liquidMesh.material.dispose();
                 this.liquidMeshes.delete(obj.name);
+            }
+            if (obj.properties.volume !== undefined && volume <= 0) {
+                obj.properties.volume = 0;
             }
             return;
         }
@@ -3208,6 +3253,11 @@ export class ExperimentEngine {
         this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         
         if (this.mouseDownPosition) {
+            if (this.controls && (this.pendingDragObject || this.pendingTiltObject || this.pendingPourObject || this.pendingStirObject)) {
+                this.controls.enabled = false;
+                event.preventDefault();
+            }
+            
             const moveDistance = Math.sqrt(
                 Math.pow(event.clientX - this.mouseDownPosition.x, 2) + 
                 Math.pow(event.clientY - this.mouseDownPosition.y, 2)
@@ -3240,6 +3290,7 @@ export class ExperimentEngine {
                         this.pendingDragObject = null;
                         this.pendingTiltObject = null;
                         this.pendingPourObject = null;
+                        this.pendingStirObject = null;
                         this.mouseDownPosition = null;
                         console.log('Tilt started on move for:', obj.name);
                     }
@@ -3256,24 +3307,51 @@ export class ExperimentEngine {
                         this.pendingDragObject = null;
                         this.pendingTiltObject = null;
                         this.pendingPourObject = null;
+                        this.pendingStirObject = null;
                         this.mouseDownPosition = null;
                         console.log('Pour started on move for:', obj.name);
+                    }
+                } else if (this.pendingStirObject && !this.activeController) {
+                    const obj = this.pendingStirObject;
+                    const stirController = this.interactions.get('stir');
+                    const canStir = (obj.interactions.stirable !== false) && obj.properties.isContainer;
+                    if (stirController && canStir) {
+                        if (this.controls) {
+                            this.controls.enabled = false;
+                        }
+                        this.activeController = stirController;
+                        stirController.start(obj, event);
+                        this.pendingDragObject = null;
+                        this.pendingTiltObject = null;
+                        this.pendingPourObject = null;
+                        this.pendingStirObject = null;
+                        this.mouseDownPosition = null;
+                        console.log('Stir started on move for:', obj.name);
                     }
                 }
             }
         }
         
         if (this.activeController) {
+            if (this.controls) {
+                this.controls.enabled = false;
+            }
             event.preventDefault();
             this.activeController.update(event);
+        } else if (this.mouseDownPosition && (this.pendingDragObject || this.pendingTiltObject || this.pendingPourObject || this.pendingStirObject)) {
+            if (this.controls) {
+                this.controls.enabled = false;
+            }
+            event.preventDefault();
         }
     }
 
     onMouseUp(event) {
-        if ((this.pendingDragObject || this.pendingTiltObject || this.pendingPourObject) && !this.activeController) {
+        if ((this.pendingDragObject || this.pendingTiltObject || this.pendingPourObject || this.pendingStirObject) && !this.activeController) {
             this.pendingDragObject = null;
             this.pendingTiltObject = null;
             this.pendingPourObject = null;
+            this.pendingStirObject = null;
             this.mouseDownPosition = null;
         }
         
@@ -3458,6 +3536,16 @@ export class ExperimentEngine {
             }
         }
         
+        const hasInteraction = obj.interactions.draggable || obj.interactions.tiltable || 
+                              ((obj.interactions.canPour || obj.properties.canPour) && obj.properties.isContainer) ||
+                              ((obj.interactions.stirable !== false) && obj.properties.isContainer);
+        
+        if (hasInteraction && !previousSelected) {
+            if (this.controls) {
+                this.controls.enabled = false;
+            }
+        }
+        
         if (obj.interactions.draggable && !previousSelected) {
             this.pendingDragObject = obj;
             this.mouseDownPosition = { x: event.clientX, y: event.clientY };
@@ -3480,9 +3568,26 @@ export class ExperimentEngine {
             }
             console.log('Object clicked, waiting for mouse move to start pour:', obj.name);
         }
+        
+        const canStir = (obj.interactions.stirable !== false) && obj.properties.isContainer;
+        if (canStir && !previousSelected) {
+            this.pendingStirObject = obj;
+            if (!this.mouseDownPosition) {
+                this.mouseDownPosition = { x: event.clientX, y: event.clientY };
+            }
+            console.log('Object clicked, waiting for mouse move to start stir:', obj.name);
+        }
     }
 
     selectObject(obj) {
+        if (this.selectedObject && this.isSwirling) {
+            const prevObj = this.selectedObject;
+            if (prevObj && prevObj.mesh && prevObj.mesh.userData.originalRotation) {
+                prevObj.mesh.rotation.x = prevObj.mesh.userData.originalRotation.x;
+                prevObj.mesh.rotation.z = prevObj.mesh.userData.originalRotation.z;
+            }
+            this.isSwirling = false;
+        }
         this.selectedObject = obj;
         if (obj) {
             console.log('Object selected:', obj.name);
@@ -3911,7 +4016,7 @@ export class ExperimentEngine {
             return { success: false, message: 'The nearby container has no liquid to transfer.' };
         }
         
-        const transferAmount = 50;
+        const transferAmount = 10;
         const sourceContent = nearbyContainer.properties.contents[0];
         const transferVolume = Math.min(transferAmount, sourceContent.volume);
         
@@ -3981,23 +4086,27 @@ export class ExperimentEngine {
             return { success: false, message: 'No nearby container found. Position the glass rod closer to a container.' };
         }
         
-        const transferAmount = 50;
         const rodContent = rodObj.properties.contents[0];
-        const transferVolume = Math.min(transferAmount, rodContent.volume);
+        const totalRodVolume = rodContent.volume;
         
-        if (transferVolume <= 0) {
+        if (totalRodVolume <= 0) {
             return { success: false, message: 'No liquid available to transfer.' };
         }
         
         const containerCapacity = nearbyContainer.properties.capacity || 1000;
         const currentContainerVolume = this.calculateVolume(nearbyContainer);
         const availableSpace = containerCapacity - currentContainerVolume;
-        const actualTransfer = Math.min(transferVolume, availableSpace);
+        const actualTransfer = Math.min(totalRodVolume, availableSpace);
         
         if (actualTransfer > 0) {
             rodContent.volume -= actualTransfer;
-            if (rodContent.volume <= 0) {
+            if (rodContent.volume <= 0 || Math.abs(rodContent.volume) < 0.001) {
                 rodObj.properties.contents.shift();
+                rodContent.volume = 0;
+            }
+            
+            if (rodObj.properties.contents.length === 0) {
+                rodObj.properties.volume = 0;
             }
             
             const existingContent = nearbyContainer.properties.contents.find(c => c.type === rodContent.type);
@@ -4010,14 +4119,30 @@ export class ExperimentEngine {
                 });
             }
             
-            this.measurements.volume[rodObj.name] = this.calculateVolume(rodObj);
-            this.measurements.volume[nearbyContainer.name] = this.calculateVolume(nearbyContainer);
-            
             rodObj.properties.volume = this.calculateVolume(rodObj);
+            if (rodObj.properties.volume < 0.001) {
+                rodObj.properties.volume = 0;
+            }
+            if (rodObj.properties.contents.length === 0) {
+                rodObj.properties.volume = 0;
+            }
+            
+            this.measurements.volume[rodObj.name] = rodObj.properties.volume;
+            this.measurements.volume[nearbyContainer.name] = this.calculateVolume(nearbyContainer);
             
             if (this.updateLiquidMesh) {
                 this.updateLiquidMesh(rodObj);
                 this.updateLiquidMesh(nearbyContainer);
+            }
+            
+            if (rodObj.properties.volume <= 0 && this.liquidMeshes.has(rodObj.name)) {
+                const liquidMesh = this.liquidMeshes.get(rodObj.name);
+                if (liquidMesh) {
+                    this.scene.remove(liquidMesh);
+                    liquidMesh.geometry.dispose();
+                    liquidMesh.material.dispose();
+                    this.liquidMeshes.delete(rodObj.name);
+                }
             }
             
             this.updateMeasurements(rodObj);
@@ -4030,7 +4155,7 @@ export class ExperimentEngine {
                 }
             }
             
-            console.log(`Drew ${actualTransfer.toFixed(1)}ml from ${rodObj.name} to ${nearbyContainer.name}`);
+            console.log(`Drew ${actualTransfer.toFixed(1)}ml from ${rodObj.name} to ${nearbyContainer.name}. Remaining in rod: ${rodObj.properties.volume.toFixed(1)}ml`);
             return { success: true, amount: actualTransfer, target: nearbyContainer.name };
         } else {
             return { success: false, message: 'Target container is full or no space available.' };
