@@ -826,14 +826,68 @@
             }
 
             if (volumeInput) {
-                volumeInput.addEventListener('change', (e) => {
-                    const volume = parseFloat(e.target.value);
-                    if (engine && engine.selectedObject && engine.selectedObject.properties.isContainer) {
-                        engine.selectedObject.properties.volume = volume;
-                        if (engine.updateLiquidMesh) {
+                const updateBeakerVolume = (volume) => {
+                    if (!engine || !engine.selectedObject) {
+                        console.log('No object selected');
+                        return;
+                    }
+                    
+                    if (!engine.selectedObject.properties.isContainer) {
+                        console.log('Selected object is not a container');
+                        return;
+                    }
+                    
+                    const volumeValue = parseFloat(volume) || 0;
+                    console.log('Updating beaker volume to:', volumeValue);
+                    
+                    engine.selectedObject.properties.volume = volumeValue;
+                    
+                    if (volumeValue > 0) {
+                        if (!engine.selectedObject.properties.contents) {
+                            engine.selectedObject.properties.contents = [];
+                        }
+                        
+                        const existingWater = engine.selectedObject.properties.contents.find(c => c.type === 'water');
+                        if (existingWater) {
+                            existingWater.volume = volumeValue;
+                        } else {
+                            engine.selectedObject.properties.contents = [{ type: 'water', volume: volumeValue }];
+                        }
+                    } else {
+                        engine.selectedObject.properties.contents = [];
+                    }
+                    
+                    console.log('Contents after update:', engine.selectedObject.properties.contents);
+                    console.log('Volume property:', engine.selectedObject.properties.volume);
+                    
+                    const calculatedVolume = engine.calculateVolume ? engine.calculateVolume(engine.selectedObject) : volumeValue;
+                    console.log('Calculated volume:', calculatedVolume);
+                    
+                    if (engine.updateLiquidMesh) {
+                        const liquidMeshExists = engine.liquidMeshes && engine.liquidMeshes.has(engine.selectedObject.name);
+                        console.log('Liquid mesh exists:', liquidMeshExists);
+                        
+                        if (!liquidMeshExists && volumeValue > 0) {
+                            console.log('Creating new liquid mesh');
+                            if (engine.createLiquidMesh) {
+                                engine.createLiquidMesh(engine.selectedObject);
+                            }
+                        } else {
+                            console.log('Updating existing liquid mesh');
                             engine.updateLiquidMesh(engine.selectedObject);
                         }
                     }
+                    if (engine.updateMeasurements) {
+                        engine.updateMeasurements(engine.selectedObject);
+                    }
+                };
+                
+                volumeInput.addEventListener('input', (e) => {
+                    updateBeakerVolume(e.target.value);
+                });
+                
+                volumeInput.addEventListener('change', (e) => {
+                    updateBeakerVolume(e.target.value);
                 });
             }
 

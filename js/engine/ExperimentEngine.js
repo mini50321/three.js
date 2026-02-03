@@ -2287,7 +2287,13 @@ export class ExperimentEngine {
     calculateLiquidHeight(obj, volume) {
         if (!obj.properties.isContainer || volume <= 0) return 0;
         
-        const box = obj.boundingBox;
+        let box = obj.boundingBox;
+        if (!box && obj.mesh) {
+            obj.mesh.updateMatrixWorld(true);
+            box = new THREE.Box3().setFromObject(obj.mesh);
+        }
+        if (!box || box.isEmpty()) return 0;
+        
         const size = box.getSize(new THREE.Vector3());
         const containerHeight = size.y;
         
@@ -2298,8 +2304,10 @@ export class ExperimentEngine {
         
         let liquidHeight = containerHeight * fillRatio * 0.85;
         
-        const minVisibleHeight = Math.max(containerHeight * 0.1, 0.15);
-        liquidHeight = Math.max(liquidHeight, minVisibleHeight);
+        if (fillRatio > 0 && fillRatio < 0.05) {
+            const minVisibleHeight = Math.max(containerHeight * 0.02, 0.05);
+            liquidHeight = Math.max(liquidHeight, minVisibleHeight);
+        }
         
         const maxHeight = containerHeight * 0.9;
         liquidHeight = Math.min(liquidHeight, maxHeight);
@@ -2579,30 +2587,39 @@ export class ExperimentEngine {
     updateLiquidMesh(obj) {
         if (!obj.properties.isContainer) return;
         
+        const volume = this.calculateVolume(obj);
+        const liquidHeight = this.calculateLiquidHeight(obj, volume);
+        
         const liquidMesh = this.liquidMeshes.get(obj.name);
+        
+        if (liquidHeight <= 0 || volume <= 0) {
+            if (liquidMesh) {
+                this.scene.remove(liquidMesh);
+                liquidMesh.geometry.dispose();
+                liquidMesh.material.dispose();
+                this.liquidMeshes.delete(obj.name);
+            }
+            return;
+        }
+        
         if (!liquidMesh) {
             this.createLiquidMesh(obj);
             return;
         }
         
-        const volume = this.calculateVolume(obj);
-        const liquidHeight = this.calculateLiquidHeight(obj, volume);
-        
-        if (liquidHeight <= 0) {
-            this.scene.remove(liquidMesh);
-            liquidMesh.geometry.dispose();
-            liquidMesh.material.dispose();
-            this.liquidMeshes.delete(obj.name);
+        obj.mesh.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(obj.mesh);
+        if (!box || box.isEmpty()) {
+            console.warn(`Cannot update liquid mesh for ${obj.name}: invalid bounding box`);
             return;
         }
         
-        obj.mesh.updateMatrixWorld(true);
-        const box = new THREE.Box3().setFromObject(obj.mesh);
         const size = box.getSize(new THREE.Vector3());
         const minYWorld = box.min.y;
         const radius = Math.min(size.x, size.z) * 0.45;
         
-        if (Math.abs(liquidMesh.geometry.parameters.height - liquidHeight) > 0.01) {
+        const currentHeight = liquidMesh.geometry.parameters.height;
+        if (Math.abs(currentHeight - liquidHeight) > 0.01) {
             liquidMesh.geometry.dispose();
             const segments = this.performanceManager.getGeometrySegments();
             liquidMesh.geometry = new THREE.CylinderGeometry(radius, radius, liquidHeight, segments);
@@ -2704,7 +2721,7 @@ export class ExperimentEngine {
                 }
                 
                 if (clickedObject) {
-                    this.selectObject(clickedObject);
+                    this.handleInteractionStart(clickedObject, event);
                     event.preventDefault();
                     event.stopPropagation();
                     return;
@@ -2718,7 +2735,7 @@ export class ExperimentEngine {
                     const lowerName = name.toLowerCase();
                     if (lowerName.includes('beaker') || lowerName.includes('flask') || lowerName.includes('bottle')) {
                         console.log('Fallback: Selecting beaker by name:', name);
-                        this.selectObject(obj);
+                        this.handleInteractionStart(obj, event);
                         event.preventDefault();
                         event.stopPropagation();
                         return;
@@ -2883,6 +2900,21 @@ export class ExperimentEngine {
                 return;
             } else {
                 console.error('Tilt controller not found!');
+            }
+        }
+        
+        if (canPour) {
+            const pourController = this.interactions.get('pour');
+            if (pourController) {
+                if (this.controls) {
+                    this.controls.enabled = false;
+                }
+                this.activeController = pourController;
+                pourController.start(obj, event);
+                console.log('Pour started for:', obj.name);
+                return;
+            } else {
+                console.error('Pour controller not found!');
             }
         }
     }
