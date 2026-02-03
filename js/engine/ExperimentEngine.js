@@ -1932,7 +1932,7 @@ export class ExperimentEngine {
             const currentRotation = obj.mesh.rotation.clone();
             const quaternion = new THREE.Quaternion().setFromEuler(currentRotation);
             
-            const tiltQuaternion = new THREE.Quaternion().setFromAxisAngle(tiltAxis, this.keyboardTiltSpeed);
+            const tiltQuaternion = new THREE.Quaternion().setFromAxisAngle(tiltAxis, -this.keyboardTiltSpeed);
             quaternion.multiply(tiltQuaternion);
             
             const newEuler = new THREE.Euler().setFromQuaternion(quaternion);
@@ -1947,7 +1947,7 @@ export class ExperimentEngine {
             const currentRotation = obj.mesh.rotation.clone();
             const quaternion = new THREE.Quaternion().setFromEuler(currentRotation);
             
-            const tiltQuaternion = new THREE.Quaternion().setFromAxisAngle(tiltAxis, -this.keyboardTiltSpeed);
+            const tiltQuaternion = new THREE.Quaternion().setFromAxisAngle(tiltAxis, this.keyboardTiltSpeed);
             quaternion.multiply(tiltQuaternion);
             
             const newEuler = new THREE.Euler().setFromQuaternion(quaternion);
