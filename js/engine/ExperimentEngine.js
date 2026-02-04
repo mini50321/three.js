@@ -3049,10 +3049,13 @@ export class ExperimentEngine {
         
         const objName = obj.name.toLowerCase();
         const isRod = objName.includes('rod') || objName.includes('glass rod');
+        const isCylinder = objName.includes('cylinder') || objName.includes('graduated');
         
         let radius;
         if (isRod) {
             radius = Math.min(size.x, size.z) * 0.3;
+        } else if (isCylinder) {
+            radius = Math.min(size.x, size.z) * 0.2;
         } else {
             radius = Math.min(size.x, size.z) * 0.45;
         }
@@ -3134,10 +3137,13 @@ export class ExperimentEngine {
         const minYWorld = box.min.y;
         const objName = obj.name.toLowerCase();
         const isRod = objName.includes('rod') || objName.includes('glass rod');
+        const isCylinder = objName.includes('cylinder') || objName.includes('graduated');
         
         let radius;
         if (isRod) {
             radius = Math.min(size.x, size.z) * 0.3;
+        } else if (isCylinder) {
+            radius = Math.min(size.x, size.z) * 0.2;
         } else {
             radius = Math.min(size.x, size.z) * 0.45;
         }
