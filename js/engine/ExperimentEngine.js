@@ -1873,7 +1873,7 @@ export class ExperimentEngine {
                 tiltController.modalJustClosed = false;
             }
             
-            if (tiltAngle > 0.3 && !tiltController.hasShownModal && !tiltController.pourModal && !tiltController.modalJustClosed) {
+            if (tiltAngle > 0.01 && !tiltController.hasShownModal && !tiltController.pourModal && !tiltController.modalJustClosed) {
                 tiltController.activeObject = obj;
                 tiltController.findPourTarget();
                 if (tiltController.pendingPourTarget) {

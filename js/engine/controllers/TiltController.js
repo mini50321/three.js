@@ -149,7 +149,7 @@ export class TiltController {
             
             console.log('Checking container:', name, 'distance:', distance.toFixed(2));
             
-            if (distance < 15 && distance > 0.1) {
+            if (distance < 15 && distance > 0.01) {
                 const distanceScore = 1 / (1 + distance);
                 const score = distanceScore;
                 
