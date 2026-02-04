@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Create Experiment - Virtual Lab Admin</title>
-    <link rel="stylesheet" href="css/admin.css">
+    <link rel="stylesheet" href="css/admin.css?v=<?= time() ?>">
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>Create New Experiment</h1>
-            <a href="index.php" class="btn btn-secondary">← Back to List</a>
+            <a href="index.php" class="btn">← Back to List</a>
         </div>
 
         <div class="card">

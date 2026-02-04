@@ -18,28 +18,28 @@ function addStep() {
             </select>
             <button type="button" onclick="this.closest('.step-card').remove()" class="btn btn-danger">Remove</button>
         </div>
-        <div style="margin-top: 16px;">
+        <div class="button-spacing">
             <button type="button" onclick="toggleRules(${stepIndex})" class="btn btn-secondary">
                 <span class="icon">⚙️</span> Configure Rules & Scoring
             </button>
         </div>
         <div id="rules-${stepIndex}" class="rules-panel" style="display: none;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                <h4 style="margin: 0; color: #1a202c; font-size: 18px; font-weight: 700;">Rules & Scoring Configuration</h4>
+            <div class="rules-header">
+                <h4>Rules & Scoring Configuration</h4>
             </div>
             
             <div class="rules-section">
                 <div class="rules-section-title">
                     <span class="icon">📊</span> Step Points
                 </div>
-                <div style="max-width: 200px;">
+                <div class="points-input-wrapper">
                     <input type="number" name="steps[${stepIndex}][points]" placeholder="10" min="0" step="1" value="10">
                     <small>Default points awarded for completing this step</small>
                 </div>
             </div>
 
             <div id="conditions-${stepIndex}"></div>
-            <div style="margin-bottom: 24px;">
+            <div class="section-spacing">
                 <button type="button" onclick="addCondition(${stepIndex})" class="btn btn-secondary">+ Add Custom Condition</button>
             </div>
 
@@ -139,45 +139,44 @@ function addCondition(stepIdx) {
     const condIdx = conditionIndex[stepIdx]++;
     const div = document.createElement('div');
     div.className = 'condition-item';
-    div.style.cssText = 'border: 1px solid #ddd; padding: 12px; margin-bottom: 10px; border-radius: 4px; background: white;';
     div.innerHTML = `
-        <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr 1fr; gap: 10px; align-items: end;">
-            <div>
-                <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Type</label>
-                <select name="steps[${stepIdx}][rules][conditions][${condIdx}][type]" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+        <div class="condition-grid">
+            <div class="condition-field">
+                <label>Type</label>
+                <select name="steps[${stepIdx}][rules][conditions][${condIdx}][type]">
                     <option value="temperature">Temperature</option>
                     <option value="volume">Volume</option>
                     <option value="hasContent">Has Content</option>
                     <option value="empty">Empty</option>
                 </select>
             </div>
-            <div>
-                <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Operator</label>
-                <select name="steps[${stepIdx}][rules][conditions][${condIdx}][operator]" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+            <div class="condition-field">
+                <label>Operator</label>
+                <select name="steps[${stepIdx}][rules][conditions][${condIdx}][operator]">
                     <option value=">">Greater than (>)</option>
                     <option value="<">Less than (<)</option>
                     <option value="==">Equals (==)</option>
                 </select>
             </div>
-            <div>
-                <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Value</label>
-                <input type="number" name="steps[${stepIdx}][rules][conditions][${condIdx}][value]" placeholder="Value" step="0.1" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+            <div class="condition-field">
+                <label>Value</label>
+                <input type="number" name="steps[${stepIdx}][rules][conditions][${condIdx}][value]" placeholder="Value" step="0.1">
+            </div>
+            <div class="condition-field">
+                <label>Tolerance</label>
+                <input type="number" name="steps[${stepIdx}][rules][conditions][${condIdx}][tolerance]" placeholder="Tolerance" step="0.1">
+            </div>
+            <div class="condition-field">
+                <label>Points</label>
+                <input type="number" name="steps[${stepIdx}][rules][conditions][${condIdx}][points]" placeholder="Points" min="0" step="1" value="5">
             </div>
             <div>
-                <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Tolerance</label>
-                <input type="number" name="steps[${stepIdx}][rules][conditions][${condIdx}][tolerance]" placeholder="Tolerance" step="0.1" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
-            </div>
-            <div>
-                <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Points</label>
-                <input type="number" name="steps[${stepIdx}][rules][conditions][${condIdx}][points]" placeholder="Points" min="0" step="1" value="5" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
-            </div>
-            <div>
-                <button type="button" onclick="this.closest('.condition-item').remove()" style="padding: 6px 12px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Remove</button>
+                <button type="button" onclick="this.closest('.condition-item').remove()" class="btn btn-danger" style="font-size: 12px; padding: 8px 16px;">Remove</button>
             </div>
         </div>
-        <div style="margin-top: 8px;">
-            <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Custom Message (optional)</label>
-            <input type="text" name="steps[${stepIdx}][rules][conditions][${condIdx}][message]" placeholder="Error message if condition fails" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+        <div class="condition-message">
+            <label style="display: block; margin-bottom: 6px; font-size: 12px; font-weight: 600; color: #64748b;">Custom Message (optional)</label>
+            <input type="text" name="steps[${stepIdx}][rules][conditions][${condIdx}][message]" placeholder="Error message if condition fails">
         </div>
     `;
     document.getElementById(`conditions-${stepIdx}`).appendChild(div);
@@ -242,45 +241,44 @@ function loadStepRules(stepIdx, stepData) {
             conditionIndex[stepIdx] = idx + 1;
             const div = document.createElement('div');
             div.className = 'condition-item';
-            div.style.cssText = 'border: 1px solid #ddd; padding: 12px; margin-bottom: 10px; border-radius: 4px; background: white;';
             div.innerHTML = `
-                <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr 1fr; gap: 10px; align-items: end;">
-                    <div>
-                        <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Type</label>
-                        <select name="steps[${stepIdx}][rules][conditions][${idx}][type]" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                <div class="condition-grid">
+                    <div class="condition-field">
+                        <label>Type</label>
+                        <select name="steps[${stepIdx}][rules][conditions][${idx}][type]">
                             <option value="temperature" ${condition.type === 'temperature' ? 'selected' : ''}>Temperature</option>
                             <option value="volume" ${condition.type === 'volume' ? 'selected' : ''}>Volume</option>
                             <option value="hasContent" ${condition.type === 'hasContent' ? 'selected' : ''}>Has Content</option>
                             <option value="empty" ${condition.type === 'empty' ? 'selected' : ''}>Empty</option>
                         </select>
                     </div>
-                    <div>
-                        <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Operator</label>
-                        <select name="steps[${stepIdx}][rules][conditions][${idx}][operator]" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                    <div class="condition-field">
+                        <label>Operator</label>
+                        <select name="steps[${stepIdx}][rules][conditions][${idx}][operator]">
                             <option value=">" ${condition.operator === '>' ? 'selected' : ''}>Greater than (>)</option>
                             <option value="<" ${condition.operator === '<' ? 'selected' : ''}>Less than (<)</option>
                             <option value="==" ${condition.operator === '==' ? 'selected' : ''}>Equals (==)</option>
                         </select>
                     </div>
-                    <div>
-                        <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Value</label>
-                        <input type="number" name="steps[${stepIdx}][rules][conditions][${idx}][value]" value="${condition.value || ''}" placeholder="Value" step="0.1" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                    <div class="condition-field">
+                        <label>Value</label>
+                        <input type="number" name="steps[${stepIdx}][rules][conditions][${idx}][value]" value="${condition.value || ''}" placeholder="Value" step="0.1">
+                    </div>
+                    <div class="condition-field">
+                        <label>Tolerance</label>
+                        <input type="number" name="steps[${stepIdx}][rules][conditions][${idx}][tolerance]" value="${condition.tolerance || ''}" placeholder="Tolerance" step="0.1">
+                    </div>
+                    <div class="condition-field">
+                        <label>Points</label>
+                        <input type="number" name="steps[${stepIdx}][rules][conditions][${idx}][points]" value="${condition.points || ''}" placeholder="Points" min="0" step="1">
                     </div>
                     <div>
-                        <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Tolerance</label>
-                        <input type="number" name="steps[${stepIdx}][rules][conditions][${idx}][tolerance]" value="${condition.tolerance || ''}" placeholder="Tolerance" step="0.1" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
-                    </div>
-                    <div>
-                        <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Points</label>
-                        <input type="number" name="steps[${stepIdx}][rules][conditions][${idx}][points]" value="${condition.points || ''}" placeholder="Points" min="0" step="1" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
-                    </div>
-                    <div>
-                        <button type="button" onclick="this.closest('.condition-item').remove()" style="padding: 6px 12px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Remove</button>
+                        <button type="button" onclick="this.closest('.condition-item').remove()" class="btn btn-danger" style="font-size: 12px; padding: 8px 16px;">Remove</button>
                     </div>
                 </div>
-                <div style="margin-top: 8px;">
-                    <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;">Custom Message (optional)</label>
-                    <input type="text" name="steps[${stepIdx}][rules][conditions][${idx}][message]" value="${condition.message || ''}" placeholder="Error message if condition fails" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                <div class="condition-message">
+                    <label style="display: block; margin-bottom: 6px; font-size: 12px; font-weight: 600; color: #64748b;">Custom Message (optional)</label>
+                    <input type="text" name="steps[${stepIdx}][rules][conditions][${idx}][message]" value="${condition.message || ''}" placeholder="Error message if condition fails">
                 </div>
             `;
             document.getElementById(`conditions-${stepIdx}`).appendChild(div);
@@ -292,20 +290,20 @@ function addInitialState() {
     const div = document.createElement('div');
     div.className = 'initial-state-card';
     div.innerHTML = `
-        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 2fr auto; gap: 16px; align-items: end;">
-            <div class="form-group" style="margin-bottom: 0;">
+        <div class="initial-state-grid">
+            <div class="form-group form-group-inline">
                 <label>Object Name</label>
                 <input type="text" name="initialState[${initialStateIndex}][objectName]" placeholder="e.g., Beaker, Conical" required>
             </div>
-            <div class="form-group" style="margin-bottom: 0;">
+            <div class="form-group form-group-inline">
                 <label>Volume (ml)</label>
                 <input type="number" name="initialState[${initialStateIndex}][volume]" placeholder="0" min="0" step="0.1">
             </div>
-            <div class="form-group" style="margin-bottom: 0;">
+            <div class="form-group form-group-inline">
                 <label>Temperature (°C)</label>
                 <input type="number" name="initialState[${initialStateIndex}][temperature]" placeholder="20" min="-273" step="0.1">
             </div>
-            <div class="form-group" style="margin-bottom: 0;">
+            <div class="form-group form-group-inline">
                 <label>Contents (comma-separated)</label>
                 <input type="text" name="initialState[${initialStateIndex}][contents]" placeholder="e.g., water, acid">
             </div>
@@ -314,7 +312,7 @@ function addInitialState() {
             </div>
         </div>
         <div class="color-config">
-            <h4 style="margin: 0 0 16px 0; color: #92400e; font-size: 15px; font-weight: 700;"><span class="icon icon-palette"></span>Color Configuration</h4>
+            <h4 class="color-config-title"><span class="icon icon-palette"></span>Color Configuration</h4>
             <div class="color-grid">
                 <div class="color-field">
                     <label>Initial Color (Hex)</label>
@@ -348,20 +346,20 @@ function loadInitialStates(initialStates) {
             const div = document.createElement('div');
             div.className = 'initial-state-card';
             div.innerHTML = `
-                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 2fr auto; gap: 16px; align-items: end;">
-                    <div class="form-group" style="margin-bottom: 0;">
+                <div class="initial-state-grid">
+                    <div class="form-group form-group-inline">
                         <label>Object Name</label>
                         <input type="text" name="initialState[${initialStateIndex}][objectName]" value="${state.objectName || ''}" placeholder="e.g., Beaker, Conical" required>
                     </div>
-                    <div class="form-group" style="margin-bottom: 0;">
+                    <div class="form-group form-group-inline">
                         <label>Volume (ml)</label>
                         <input type="number" name="initialState[${initialStateIndex}][volume]" value="${state.volume || ''}" placeholder="0" min="0" step="0.1">
                     </div>
-                    <div class="form-group" style="margin-bottom: 0;">
+                    <div class="form-group form-group-inline">
                         <label>Temperature (°C)</label>
                         <input type="number" name="initialState[${initialStateIndex}][temperature]" value="${state.temperature || ''}" placeholder="20" min="-273" step="0.1">
                     </div>
-                    <div class="form-group" style="margin-bottom: 0;">
+                    <div class="form-group form-group-inline">
                         <label>Contents (comma-separated)</label>
                         <input type="text" name="initialState[${initialStateIndex}][contents]" value="${Array.isArray(state.contents) ? state.contents.join(', ') : (state.contents || '')}" placeholder="e.g., water, acid">
                     </div>
@@ -370,7 +368,7 @@ function loadInitialStates(initialStates) {
                     </div>
                 </div>
                 <div class="color-config">
-                    <h4 style="margin: 0 0 16px 0; color: #92400e; font-size: 15px; font-weight: 700;"><span class="icon icon-palette"></span>Color Configuration</h4>
+                    <h4 class="color-config-title"><span class="icon icon-palette"></span>Color Configuration</h4>
                     <div class="color-grid">
                         <div class="color-field">
                             <label>Initial Color (Hex)</label>
@@ -400,10 +398,10 @@ function addReaction() {
     const div = document.createElement('div');
     div.className = 'reaction-card';
     div.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h4 style="margin: 0; color: #1a202c; font-size: 18px; font-weight: 700;"><span class="icon icon-reaction"></span>Reaction ${reactionIndex + 1}</h4>
+        <div class="reaction-header">
+            <h4 class="reaction-title"><span class="icon icon-reaction"></span>Reaction ${reactionIndex + 1}</h4>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+        <div class="reaction-grid">
             <div class="form-group">
                 <label>Reactants (comma-separated)</label>
                 <input type="text" name="reactions[${reactionIndex}][reactants]" placeholder="e.g., acid, base" required>
@@ -415,7 +413,7 @@ function addReaction() {
                 <small>Type of substance produced</small>
             </div>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+        <div class="reaction-grid">
             <div class="form-group">
                 <label>Result Color (Hex)</label>
                 <input type="text" name="reactions[${reactionIndex}][result][color]" placeholder="#ffffff" value="#ffffff" pattern="#[0-9a-fA-F]{6}">
@@ -433,4 +431,53 @@ function addReaction() {
     `;
     document.getElementById('reactions').appendChild(div);
     reactionIndex++;
+}
+
+function loadReactions(reactionsData) {
+    const container = document.getElementById('reactions');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    reactionIndex = 0;
+    
+    if (reactionsData && Array.isArray(reactionsData)) {
+        reactionsData.forEach(reaction => {
+            const div = document.createElement('div');
+            div.className = 'reaction-card';
+            div.innerHTML = `
+                <div class="reaction-header">
+                    <h4 class="reaction-title"><span class="icon icon-reaction"></span>Reaction ${reactionIndex + 1}</h4>
+                </div>
+                <div class="reaction-grid">
+                    <div class="form-group">
+                        <label>Reactants (comma-separated)</label>
+                        <input type="text" name="reactions[${reactionIndex}][reactants]" value="${(reaction.reactants || []).join(', ')}" placeholder="e.g., acid, base" required>
+                        <small>Substances that react together</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Result Type</label>
+                        <input type="text" name="reactions[${reactionIndex}][result][type]" value="${reaction.result?.type || ''}" placeholder="e.g., salt, water" required>
+                        <small>Type of substance produced</small>
+                    </div>
+                </div>
+                <div class="reaction-grid">
+                    <div class="form-group">
+                        <label>Result Color (Hex)</label>
+                        <input type="text" name="reactions[${reactionIndex}][result][color]" value="${reaction.result?.color ? '#' + reaction.result.color.toString(16).padStart(6, '0') : '#ffffff'}" placeholder="#ffffff" pattern="#[0-9a-fA-F]{6}">
+                        <small>Hex color code for resulting liquid</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Message (optional)</label>
+                        <input type="text" name="reactions[${reactionIndex}][message]" value="${reaction.message || ''}" placeholder="e.g., Neutralization reaction occurred">
+                        <small>Message displayed when reaction occurs</small>
+                    </div>
+                </div>
+                <div>
+                    <button type="button" onclick="this.closest('.reaction-card').remove()" class="btn btn-danger">Remove Reaction</button>
+                </div>
+            `;
+            container.appendChild(div);
+            reactionIndex++;
+        });
+    }
 }
