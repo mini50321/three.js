@@ -3076,6 +3076,7 @@ export class ExperimentEngine {
         const contents = obj.properties.contents;
         let baseColor = new THREE.Color(0x4a90e2);
         
+        const reactions = this.getReactionRules();
         const colorMap = {
             'water': 0x4a90e2,
             'acid': 0xff4444,
@@ -3089,7 +3090,7 @@ export class ExperimentEngine {
             'phenolphthalein': 0xffffff,
             'litmus': 0x9370db,
             'universal_indicator': 0x00ff00,
-            'indicator_solution': 0x00ff00
+            'indicator_solution': 0xffeb3b
         };
         
         const initialState = this.config.initialState && Array.isArray(this.config.initialState) ? 
@@ -3100,12 +3101,20 @@ export class ExperimentEngine {
         const hasInitialContents = Math.abs(currentVolume - initialVolume) < 0.1;
         
         if (contents.length === 1) {
-            const contentType = contents[0].type?.toLowerCase() || 'water';
+            const contentType = (contents[0].type || '').toLowerCase();
+            
             if (hasInitialContents && initialState && initialState.initialColor) {
                 const colorStr = initialState.initialColor.startsWith('#') ? initialState.initialColor : '#' + initialState.initialColor;
                 baseColor = new THREE.Color(colorStr);
             } else {
-                baseColor = new THREE.Color(colorMap[contentType] || colorMap['water']);
+                const reactionForContent = reactions.find(r => 
+                    r.result && (r.result.type || '').toLowerCase() === contentType
+                );
+                if (reactionForContent && reactionForContent.result && reactionForContent.result.color !== undefined) {
+                    baseColor = new THREE.Color(reactionForContent.result.color);
+                } else {
+                    baseColor = new THREE.Color(colorMap[contentType] || colorMap['water']);
+                }
             }
         } else {
             let r = 0, g = 0, b = 0;
