@@ -1102,7 +1102,10 @@ export class ExperimentEngine {
         
         try {
             console.log('Loading model from path:', modelPath);
-            const gltf = await loader.loadAsync(modelPath);
+            const pathParts = modelPath.split('/');
+            const filename = pathParts.pop();
+            const encodedPath = pathParts.join('/') + '/' + encodeURIComponent(filename);
+            const gltf = await loader.loadAsync(encodedPath);
             console.log('Model loaded successfully:', gltf);
             
             if (!gltf || !gltf.scene) {
@@ -1866,11 +1869,18 @@ export class ExperimentEngine {
             const tiltZ = obj.mesh.rotation.z;
             const tiltAngle = Math.abs(tiltX) + Math.abs(tiltZ);
             
-            if (tiltAngle < 0.2 && tiltController.hasShownModal && tiltController.activeObject === obj) {
-                tiltController.hasShownModal = false;
-                tiltController.activeObject = null;
-                tiltController.pendingPourTarget = null;
-                tiltController.modalJustClosed = false;
+            if (tiltController.dismissedObjects && tiltController.dismissedObjects.has(obj)) {
+                if (tiltAngle < 0.005) {
+                    tiltController.dismissedObjects.delete(obj);
+                    console.log('[Pour Detection] Object untilted, removed from dismissedObjects:', obj.name);
+                    if (tiltController.dismissedObjects.size === 0) {
+                        tiltController.hasShownModal = false;
+                        tiltController.modalJustClosed = false;
+                    }
+                } else {
+                    console.log('[Pour Detection] Skipping dismissed object:', obj.name, 'tiltAngle:', tiltAngle.toFixed(4));
+                }
+                continue;
             }
             
             if (tiltAngle > 0.01 && !tiltController.hasShownModal && !tiltController.pourModal && !tiltController.modalJustClosed) {

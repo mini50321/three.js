@@ -11,6 +11,17 @@ export class TiltController {
         this.pendingPourTarget = null;
         this.hasShownModal = false;
         this.modalJustClosed = false;
+        this.dismissedObjects = new Set();
+    }
+    
+    formatModelName(name) {
+        return name
+            .replace(/_/g, ' ')
+            .replace(/\s+/g, ' ')
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ')
+            .trim();
     }
 
     start(obj, event) {
@@ -97,7 +108,7 @@ export class TiltController {
             if (hasContents) {
                 const tiltThreshold = 0.001;
                 if (tiltAngle > tiltThreshold) {
-                    if (!this.hasShownModal && !this.modalJustClosed) {
+                    if (!this.hasShownModal && !this.modalJustClosed && !this.dismissedObjects.has(this.activeObject)) {
                         console.log('Tilt angle sufficient, finding pour target...', { tiltAngle, threshold: tiltThreshold, tiltX, tiltZ });
                         this.findPourTarget();
                         if (this.pendingPourTarget) {
@@ -108,7 +119,7 @@ export class TiltController {
                             console.log('No pour target found nearby - distance check may be failing');
                         }
                     } else {
-                        console.log('Tilt sufficient but blocked:', { hasShownModal: this.hasShownModal, modalJustClosed: this.modalJustClosed, tiltAngle });
+                        console.log('Tilt sufficient but blocked:', { hasShownModal: this.hasShownModal, modalJustClosed: this.modalJustClosed, isDismissed: this.dismissedObjects.has(this.activeObject), tiltAngle });
                     }
                 }
             }
@@ -228,7 +239,7 @@ export class TiltController {
                 </div>
                 <div style="padding: 30px;">
                     <p style="color: rgba(255, 255, 255, 0.9); margin-bottom: 20px; font-size: 16px;">
-                        Pour from <strong>${this.activeObject.name}</strong> to <strong>${this.pendingPourTarget.name}</strong>
+                        Pour from <strong>${this.formatModelName(this.activeObject.name)}</strong> to <strong>${this.formatModelName(this.pendingPourTarget.name)}</strong>
                     </p>
                     <div style="margin-bottom: 20px;">
                         <label style="display: block; color: rgba(255, 255, 255, 0.8); margin-bottom: 10px; font-size: 14px;">
@@ -402,10 +413,18 @@ export class TiltController {
                 this.pourModal = null;
             }
         }
+        const dismissedObject = this.activeObject;
+        if (dismissedObject) {
+            this.dismissedObjects.add(dismissedObject);
+            console.log('[TiltController] Modal closed, object added to dismissedObjects:', dismissedObject.name, 'Set size:', this.dismissedObjects.size);
+        } else {
+            console.log('[TiltController] Modal closed, but no activeObject to dismiss');
+        }
         this.pendingPourTarget = null;
+        this.activeObject = null;
         this.hasShownModal = true;
         this.modalJustClosed = true;
-        console.log('[TiltController] Modal closed, hasShownModal set to true, modalJustClosed set to true');
+        console.log('[TiltController] Modal closed, state reset');
         
         setTimeout(() => {
             this.modalJustClosed = false;
@@ -419,9 +438,23 @@ export class TiltController {
             const quaternion = new THREE.Quaternion().setFromEuler(this.activeObject.mesh.rotation);
             this.engine.physicsManager.setBodyRotation(this.activeObject.physicsBody, quaternion);
         }
+        const endedObject = this.activeObject;
         this.activeObject = null;
-        this.hasShownModal = false;
-        this.modalJustClosed = false;
+        
+        if (endedObject) {
+            const tiltAngle = Math.abs(endedObject.mesh.rotation.x) + Math.abs(endedObject.mesh.rotation.z);
+            if (tiltAngle < 0.005 && this.dismissedObjects.has(endedObject)) {
+                this.dismissedObjects.delete(endedObject);
+                console.log('[TiltController] Tilt ended, object untilted, removed from dismissedObjects:', endedObject.name);
+            }
+            if (this.dismissedObjects.size === 0) {
+                this.hasShownModal = false;
+                this.modalJustClosed = false;
+            }
+        } else {
+            this.hasShownModal = false;
+            this.modalJustClosed = false;
+        }
     }
 }
 
