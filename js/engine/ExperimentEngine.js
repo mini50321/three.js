@@ -1137,7 +1137,7 @@ export class ExperimentEngine {
                 modelProps.capacity = 500;
                 modelProps.canPour = true;
                 modelProps.canHeat = false;
-                defaultScale = 2.0;
+                defaultScale = 1.2;
             } else if (lowerName.includes('rod') || lowerName.includes('glass rod')) {
                 modelProps.isContainer = true;
                 modelProps.capacity = 50;
