@@ -62,7 +62,13 @@ if ($_POST['mode'] === 'create') {
                                 'type' => $condition['type']
                             ];
                             if (!empty($condition['operator'])) $cond['operator'] = $condition['operator'];
-                            if (isset($condition['value']) && $condition['value'] !== '') $cond['value'] = floatval($condition['value']);
+                            if (isset($condition['value']) && $condition['value'] !== '') {
+                                if ($condition['type'] === 'hasContent' || $condition['type'] === 'empty') {
+                                    $cond['value'] = $condition['value'];
+                                } else {
+                                    $cond['value'] = floatval($condition['value']);
+                                }
+                            }
                             if (!empty($condition['tolerance'])) $cond['tolerance'] = floatval($condition['tolerance']);
                             if (!empty($condition['points'])) $cond['points'] = intval($condition['points']);
                             if (!empty($condition['message'])) $cond['message'] = $condition['message'];
@@ -95,23 +101,6 @@ if ($_POST['mode'] === 'create') {
                     }
                     if (!empty($step['rules']['volume']['points'])) {
                         $rules['volume']['points'] = intval($step['rules']['volume']['points']);
-                    }
-                }
-                
-                if ((!empty($step['rules']['rotation']['x']) && $step['rules']['rotation']['x'] !== '') || 
-                    (!empty($step['rules']['rotation']['z']) && $step['rules']['rotation']['z'] !== '')) {
-                    $rules['rotation'] = [];
-                    if (!empty($step['rules']['rotation']['x']) && $step['rules']['rotation']['x'] !== '') {
-                        $rules['rotation']['x'] = floatval($step['rules']['rotation']['x']);
-                    }
-                    if (!empty($step['rules']['rotation']['z']) && $step['rules']['rotation']['z'] !== '') {
-                        $rules['rotation']['z'] = floatval($step['rules']['rotation']['z']);
-                    }
-                    if (!empty($step['rules']['rotation']['tolerance'])) {
-                        $rules['rotation']['tolerance'] = floatval($step['rules']['rotation']['tolerance']);
-                    }
-                    if (!empty($step['rules']['rotation']['points'])) {
-                        $rules['rotation']['points'] = intval($step['rules']['rotation']['points']);
                     }
                 }
                 
@@ -232,7 +221,13 @@ if ($_POST['mode'] === 'create') {
                                 'type' => $condition['type']
                             ];
                             if (!empty($condition['operator'])) $cond['operator'] = $condition['operator'];
-                            if (isset($condition['value']) && $condition['value'] !== '') $cond['value'] = floatval($condition['value']);
+                            if (isset($condition['value']) && $condition['value'] !== '') {
+                                if ($condition['type'] === 'hasContent' || $condition['type'] === 'empty') {
+                                    $cond['value'] = $condition['value'];
+                                } else {
+                                    $cond['value'] = floatval($condition['value']);
+                                }
+                            }
                             if (!empty($condition['tolerance'])) $cond['tolerance'] = floatval($condition['tolerance']);
                             if (!empty($condition['points'])) $cond['points'] = intval($condition['points']);
                             if (!empty($condition['message'])) $cond['message'] = $condition['message'];
@@ -265,23 +260,6 @@ if ($_POST['mode'] === 'create') {
                     }
                     if (!empty($step['rules']['volume']['points'])) {
                         $rules['volume']['points'] = intval($step['rules']['volume']['points']);
-                    }
-                }
-                
-                if ((!empty($step['rules']['rotation']['x']) && $step['rules']['rotation']['x'] !== '') || 
-                    (!empty($step['rules']['rotation']['z']) && $step['rules']['rotation']['z'] !== '')) {
-                    $rules['rotation'] = [];
-                    if (!empty($step['rules']['rotation']['x']) && $step['rules']['rotation']['x'] !== '') {
-                        $rules['rotation']['x'] = floatval($step['rules']['rotation']['x']);
-                    }
-                    if (!empty($step['rules']['rotation']['z']) && $step['rules']['rotation']['z'] !== '') {
-                        $rules['rotation']['z'] = floatval($step['rules']['rotation']['z']);
-                    }
-                    if (!empty($step['rules']['rotation']['tolerance'])) {
-                        $rules['rotation']['tolerance'] = floatval($step['rules']['rotation']['tolerance']);
-                    }
-                    if (!empty($step['rules']['rotation']['points'])) {
-                        $rules['rotation']['points'] = intval($step['rules']['rotation']['points']);
                     }
                 }
                 

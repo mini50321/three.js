@@ -1,22 +1,43 @@
-let stepIndex = document.querySelectorAll('.step').length || 0;
+let stepIndex = 0;
+document.addEventListener('DOMContentLoaded', function() {
+    const existingSteps = document.querySelectorAll('.step-card');
+    if (existingSteps.length > 0) {
+        stepIndex = existingSteps.length;
+    }
+});
 let initialStateIndex = 0;
 let reactionIndex = 0;
 
 function addStep() {
     const div = document.createElement('div');
     div.className = 'step-card';
+    const stepNumber = stepIndex + 1;
     div.innerHTML = `
+        <div style="margin-bottom: 16px;">
+            <h4 style="margin: 0; color: #1e293b; font-size: 18px; font-weight: 700;">Step ${stepNumber}</h4>
+        </div>
         <div class="step-header">
-            <input type="text" name="steps[${stepIndex}][instruction]" placeholder="Enter step instruction (e.g., Heat the beaker until...)" required>
-            <input type="text" name="steps[${stepIndex}][equipment]" placeholder="Equipment name" required>
-            <select name="steps[${stepIndex}][action]" required>
-                <option value="tilt">Tilt</option>
-                <option value="pour">Pour</option>
-                <option value="heat">Heat</option>
-                <option value="stir">Stir</option>
-                <option value="drag">Drag</option>
-            </select>
-            <button type="button" onclick="this.closest('.step-card').remove()" class="btn btn-danger">Remove</button>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Instruction</label>
+                <input type="text" name="steps[${stepIndex}][instruction]" placeholder="Enter step instruction (e.g., Heat the beaker until...)" required>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Equipment</label>
+                <input type="text" name="steps[${stepIndex}][equipment]" placeholder="Equipment name" required>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Action</label>
+                <select name="steps[${stepIndex}][action]" required>
+                    <option value="tilt">Tilt</option>
+                    <option value="pour">Pour</option>
+                    <option value="heat">Heat</option>
+                    <option value="stir">Stir</option>
+                    <option value="drag">Drag</option>
+                </select>
+            </div>
+            <div style="display: flex; align-items: flex-end;">
+                <button type="button" onclick="this.closest('.step-card').remove()" class="btn btn-danger">Remove</button>
+            </div>
         </div>
         <div class="button-spacing">
             <button type="button" onclick="toggleRules(${stepIndex})" class="btn btn-secondary">
@@ -88,37 +109,13 @@ function addStep() {
                     <button type="button" onclick="clearRule('volume', ${stepIndex})" class="btn btn-secondary">Clear Volume Rule</button>
                 </div>
             </div>
-
-            <div class="rules-section">
-                <div class="rules-section-title">
-                    <span class="icon">🔄</span> Rotation Rule
-                </div>
-                <div class="rules-grid">
-                    <div class="rule-field">
-                        <label>X-Axis Angle</label>
-                        <input type="number" name="steps[${stepIndex}][rules][rotation][x]" placeholder="0.5" step="0.01" value="0">
-                    </div>
-                    <div class="rule-field">
-                        <label>Z-Axis Angle</label>
-                        <input type="number" name="steps[${stepIndex}][rules][rotation][z]" placeholder="0" step="0.01" value="0">
-                    </div>
-                    <div class="rule-field">
-                        <label>Angle Tolerance</label>
-                        <input type="number" name="steps[${stepIndex}][rules][rotation][tolerance]" placeholder="0.1" step="0.01" value="0">
-                    </div>
-                    <div class="rule-field">
-                        <label>Points Awarded</label>
-                        <input type="number" name="steps[${stepIndex}][rules][rotation][points]" placeholder="10" min="0" step="1" value="0">
-                    </div>
-                </div>
-                <div class="rule-actions">
-                    <button type="button" onclick="clearRule('rotation', ${stepIndex})" class="btn btn-secondary">Clear Rotation Rule</button>
-                </div>
-            </div>
         </div>
     `;
-    document.getElementById('steps').appendChild(div);
-    stepIndex++;
+    const stepsContainer = document.getElementById('steps');
+    if (stepsContainer) {
+        stepsContainer.appendChild(div);
+        stepIndex++;
+    }
 }
 
 let conditionIndex = {};
@@ -143,7 +140,7 @@ function addCondition(stepIdx) {
         <div class="condition-grid">
             <div class="condition-field">
                 <label>Type</label>
-                <select name="steps[${stepIdx}][rules][conditions][${condIdx}][type]">
+                <select name="steps[${stepIdx}][rules][conditions][${condIdx}][type]" class="condition-type-select">
                     <option value="temperature">Temperature</option>
                     <option value="volume">Volume</option>
                     <option value="hasContent">Has Content</option>
@@ -160,7 +157,7 @@ function addCondition(stepIdx) {
             </div>
             <div class="condition-field">
                 <label>Value</label>
-                <input type="number" name="steps[${stepIdx}][rules][conditions][${condIdx}][value]" placeholder="Value" step="0.1">
+                <input type="text" name="steps[${stepIdx}][rules][conditions][${condIdx}][value]" placeholder="Value or content name" class="condition-value-input">
             </div>
             <div class="condition-field">
                 <label>Tolerance</label>
@@ -179,7 +176,39 @@ function addCondition(stepIdx) {
             <input type="text" name="steps[${stepIdx}][rules][conditions][${condIdx}][message]" placeholder="Error message if condition fails">
         </div>
     `;
-    document.getElementById(`conditions-${stepIdx}`).appendChild(div);
+    const conditionsContainer = document.getElementById(`conditions-${stepIdx}`);
+    if (conditionsContainer) {
+        conditionsContainer.appendChild(div);
+        
+        const typeSelect = div.querySelector('.condition-type-select');
+        const valueInput = div.querySelector('.condition-value-input');
+        
+        if (typeSelect && valueInput) {
+            function updateInputType() {
+                const selectedType = typeSelect.value;
+                if (selectedType === 'hasContent') {
+                    valueInput.type = 'text';
+                    valueInput.placeholder = 'e.g., water, acid, indicator_solution';
+                    valueInput.disabled = false;
+                    valueInput.removeAttribute('step');
+                } else if (selectedType === 'empty') {
+                    valueInput.type = 'text';
+                    valueInput.placeholder = 'N/A (not used)';
+                    valueInput.disabled = true;
+                    valueInput.value = '';
+                    valueInput.removeAttribute('step');
+                } else {
+                    valueInput.type = 'number';
+                    valueInput.step = '0.1';
+                    valueInput.placeholder = 'Value';
+                    valueInput.disabled = false;
+                }
+            }
+            
+            typeSelect.addEventListener('change', updateInputType);
+            updateInputType();
+        }
+    }
 }
 
 function clearRule(ruleType, stepIdx) {
@@ -245,7 +274,7 @@ function loadStepRules(stepIdx, stepData) {
                 <div class="condition-grid">
                     <div class="condition-field">
                         <label>Type</label>
-                        <select name="steps[${stepIdx}][rules][conditions][${idx}][type]">
+                        <select name="steps[${stepIdx}][rules][conditions][${idx}][type]" class="condition-type-select">
                             <option value="temperature" ${condition.type === 'temperature' ? 'selected' : ''}>Temperature</option>
                             <option value="volume" ${condition.type === 'volume' ? 'selected' : ''}>Volume</option>
                             <option value="hasContent" ${condition.type === 'hasContent' ? 'selected' : ''}>Has Content</option>
@@ -262,7 +291,7 @@ function loadStepRules(stepIdx, stepData) {
                     </div>
                     <div class="condition-field">
                         <label>Value</label>
-                        <input type="number" name="steps[${stepIdx}][rules][conditions][${idx}][value]" value="${condition.value || ''}" placeholder="Value" step="0.1">
+                        <input type="${condition.type === 'hasContent' || condition.type === 'empty' ? 'text' : 'number'}" name="steps[${stepIdx}][rules][conditions][${idx}][value]" value="${condition.value || ''}" placeholder="${condition.type === 'hasContent' ? 'e.g., water, acid' : (condition.type === 'empty' ? 'N/A (not used)' : 'Value')}" class="condition-value-input" ${condition.type === 'empty' ? 'disabled' : ''} ${condition.type !== 'hasContent' && condition.type !== 'empty' ? 'step="0.1"' : ''}>
                     </div>
                     <div class="condition-field">
                         <label>Tolerance</label>
@@ -281,7 +310,37 @@ function loadStepRules(stepIdx, stepData) {
                     <input type="text" name="steps[${stepIdx}][rules][conditions][${idx}][message]" value="${condition.message || ''}" placeholder="Error message if condition fails">
                 </div>
             `;
-            document.getElementById(`conditions-${stepIdx}`).appendChild(div);
+            const conditionsContainer = document.getElementById(`conditions-${stepIdx}`);
+            if (conditionsContainer) {
+                conditionsContainer.appendChild(div);
+                
+                const typeSelect = div.querySelector('.condition-type-select');
+                const valueInput = div.querySelector('.condition-value-input');
+                
+                if (typeSelect && valueInput) {
+                    function updateInputType() {
+                        const selectedType = typeSelect.value;
+                        if (selectedType === 'hasContent' || selectedType === 'empty') {
+                            valueInput.type = 'text';
+                            valueInput.placeholder = selectedType === 'hasContent' ? 'e.g., water, acid' : 'N/A (not used)';
+                            if (selectedType === 'empty') {
+                                valueInput.disabled = true;
+                                valueInput.value = '';
+                            } else {
+                                valueInput.disabled = false;
+                            }
+                        } else {
+                            valueInput.type = 'number';
+                            valueInput.step = '0.1';
+                            valueInput.placeholder = 'Value';
+                            valueInput.disabled = false;
+                        }
+                    }
+                    
+                    typeSelect.addEventListener('change', updateInputType);
+                    updateInputType();
+                }
+            }
         });
     }
 }

@@ -30,6 +30,7 @@ export class TiltController {
         this.hidePourModal();
         this.activeObject = obj;
         this.hasShownModal = false;
+        this.modalJustClosed = false;
         this.pendingPourTarget = null;
         const rect = this.engine.renderer.domElement.getBoundingClientRect();
         this.startMouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -94,15 +95,20 @@ export class TiltController {
             });
             
             if (hasContents) {
-                if (tiltAngle > 0.3 && !this.hasShownModal) {
-                    console.log('Tilt angle sufficient, finding pour target...');
-                    this.findPourTarget();
-                    if (this.pendingPourTarget) {
-                        console.log('Target found! Showing pour modal for:', this.activeObject.name, 'to', this.pendingPourTarget.name);
-                        this.showPourModal();
-                        this.hasShownModal = true;
+                const tiltThreshold = 0.001;
+                if (tiltAngle > tiltThreshold) {
+                    if (!this.hasShownModal && !this.modalJustClosed) {
+                        console.log('Tilt angle sufficient, finding pour target...', { tiltAngle, threshold: tiltThreshold, tiltX, tiltZ });
+                        this.findPourTarget();
+                        if (this.pendingPourTarget) {
+                            console.log('Target found! Showing pour modal for:', this.activeObject.name, 'to', this.pendingPourTarget.name);
+                            this.showPourModal();
+                            this.hasShownModal = true;
+                        } else {
+                            console.log('No pour target found nearby - distance check may be failing');
+                        }
                     } else {
-                        console.log('No pour target found nearby');
+                        console.log('Tilt sufficient but blocked:', { hasShownModal: this.hasShownModal, modalJustClosed: this.modalJustClosed, tiltAngle });
                     }
                 }
             }
@@ -143,7 +149,7 @@ export class TiltController {
             
             console.log('Checking container:', name, 'distance:', distance.toFixed(2));
             
-            if (distance < 10 && distance > 0.1) {
+            if (distance < 15 && distance > 0.1) {
                 const distanceScore = 1 / (1 + distance);
                 const score = distanceScore;
                 

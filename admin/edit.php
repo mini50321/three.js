@@ -161,17 +161,31 @@ if (!$exp) {
                 <div id="steps">
                 <?php foreach ($exp['steps'] as $i => $s): ?>
                 <div class="step-card">
+                    <div style="margin-bottom: 16px;">
+                        <h4 style="margin: 0; color: #1e293b; font-size: 18px; font-weight: 700;">Step <?= $i + 1 ?></h4>
+                    </div>
                     <div class="step-header">
-                        <input type="text" name="steps[<?= $i ?>][instruction]" value="<?= htmlspecialchars($s['instruction']) ?>" placeholder="Step instruction" required>
-                        <input type="text" name="steps[<?= $i ?>][equipment]" value="<?= htmlspecialchars($s['equipment']) ?>" placeholder="Equipment name" required>
-                        <select name="steps[<?= $i ?>][action]" required>
-                            <option value="tilt" <?= $s['action']=='tilt'?'selected':'' ?>>Tilt</option>
-                            <option value="pour" <?= $s['action']=='pour'?'selected':'' ?>>Pour</option>
-                            <option value="heat" <?= $s['action']=='heat'?'selected':'' ?>>Heat</option>
-                            <option value="stir" <?= $s['action']=='stir'?'selected':'' ?>>Stir</option>
-                            <option value="drag" <?= $s['action']=='drag'?'selected':'' ?>>Drag</option>
-                        </select>
-                        <button type="button" onclick="this.closest('.step-card').remove()" class="btn btn-danger">Remove</button>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Instruction</label>
+                            <input type="text" name="steps[<?= $i ?>][instruction]" value="<?= htmlspecialchars($s['instruction']) ?>" placeholder="Step instruction" required>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Equipment</label>
+                            <input type="text" name="steps[<?= $i ?>][equipment]" value="<?= htmlspecialchars($s['equipment']) ?>" placeholder="Equipment name" required>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Action</label>
+                            <select name="steps[<?= $i ?>][action]" required>
+                                <option value="tilt" <?= $s['action']=='tilt'?'selected':'' ?>>Tilt</option>
+                                <option value="pour" <?= $s['action']=='pour'?'selected':'' ?>>Pour</option>
+                                <option value="heat" <?= $s['action']=='heat'?'selected':'' ?>>Heat</option>
+                                <option value="stir" <?= $s['action']=='stir'?'selected':'' ?>>Stir</option>
+                                <option value="drag" <?= $s['action']=='drag'?'selected':'' ?>>Drag</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: flex-end;">
+                            <button type="button" onclick="this.closest('.step-card').remove()" class="btn btn-danger">Remove</button>
+                        </div>
                     </div>
                     <div style="margin-top: 16px;">
                         <button type="button" onclick="toggleRules(<?= $i ?>)" class="btn btn-secondary">⚙️ Configure Rules & Scoring</button>
@@ -239,33 +253,6 @@ if (!$exp) {
                             </div>
                             <div class="rule-actions">
                                 <button type="button" onclick="clearRule('volume', <?= $i ?>)" class="btn btn-secondary">Clear Volume Rule</button>
-                            </div>
-                        </div>
-
-                        <div class="rules-section">
-                            <div class="rules-section-title">
-                                <span class="icon">🔄</span> Rotation Rule
-                            </div>
-                            <div class="rules-grid">
-                                <div class="rule-field">
-                                    <label>X-Axis Angle</label>
-                                    <input type="number" name="steps[<?= $i ?>][rules][rotation][x]" value="<?= isset($s['rules']['rotation']['x']) ? htmlspecialchars($s['rules']['rotation']['x']) : '0' ?>" placeholder="0.5" step="0.01">
-                                </div>
-                                <div class="rule-field">
-                                    <label>Z-Axis Angle</label>
-                                    <input type="number" name="steps[<?= $i ?>][rules][rotation][z]" value="<?= isset($s['rules']['rotation']['z']) ? htmlspecialchars($s['rules']['rotation']['z']) : '0' ?>" placeholder="0" step="0.01">
-                                </div>
-                                <div class="rule-field">
-                                    <label>Angle Tolerance</label>
-                                    <input type="number" name="steps[<?= $i ?>][rules][rotation][tolerance]" value="<?= isset($s['rules']['rotation']['tolerance']) ? htmlspecialchars($s['rules']['rotation']['tolerance']) : '0' ?>" placeholder="0.1" step="0.01">
-                                </div>
-                                <div class="rule-field">
-                                    <label>Points Awarded</label>
-                                    <input type="number" name="steps[<?= $i ?>][rules][rotation][points]" value="<?= isset($s['rules']['rotation']['points']) ? htmlspecialchars($s['rules']['rotation']['points']) : '0' ?>" placeholder="10" min="0" step="1">
-                                </div>
-                            </div>
-                            <div class="rule-actions">
-                                <button type="button" onclick="clearRule('rotation', <?= $i ?>)" class="btn btn-secondary">Clear Rotation Rule</button>
                             </div>
                         </div>
                     </div>

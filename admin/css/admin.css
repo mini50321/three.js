@@ -265,7 +265,7 @@ tr:last-child td {
     display: grid;
     grid-template-columns: 2fr 1.5fr 1fr auto;
     gap: 16px;
-    align-items: center;
+    align-items: end;
     margin-bottom: 20px;
 }
 

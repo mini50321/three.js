@@ -3835,7 +3835,19 @@ export class ExperimentEngine {
                 }
                 break;
             case 'hasContent':
-                return { valid: equipment.properties.contents.length > 0, message: condition.message || 'Container should have contents' };
+                if (equipment.properties.contents.length === 0) {
+                    return { valid: false, message: condition.message || 'Container should have contents' };
+                }
+                if (condition.value) {
+                    const contentTypes = equipment.properties.contents.map(c => c.type || c).map(t => String(t).toLowerCase());
+                    const targetContent = String(condition.value).toLowerCase();
+                    const hasTarget = contentTypes.includes(targetContent);
+                    return { 
+                        valid: hasTarget, 
+                        message: condition.message || `Container should contain ${condition.value}` 
+                    };
+                }
+                return { valid: true, message: condition.message || 'Container has contents' };
             case 'empty':
                 return { valid: equipment.properties.contents.length === 0, message: condition.message || 'Container should be empty' };
         }
