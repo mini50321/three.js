@@ -24,7 +24,8 @@ This experiment demonstrates:
 
 Upload these models (if not already uploaded):
 - Beaker.glb
-- graduated_Cylinder_2.glb (or graduated_Cylinder_3.glb)
+- graduated_Cylinder_2.glb (or graduated_Cylinder_3.glb) - for measuring water
+- TestTube.glb (you'll add 3 instances)
 - Glass_Rod.glb
 - Spirit Lamp .glb
 - Burner Stand.glb
@@ -33,7 +34,7 @@ Upload these models (if not already uploaded):
 
 Add initial states for each container:
 
-#### Graduated Cylinder 1 (Water):
+#### Graduated Cylinder (Water):
 - **Object Name**: `graduated_Cylinder_2` (or the exact name from your model)
 - **Volume (ml)**: 50
 - **Temperature (°C)**: 20
@@ -51,8 +52,8 @@ Add initial states for each container:
 - **After Boiling**: `#ffffff`
 - **After Cooling**: `#ffffff`
 
-#### Graduated Cylinder 2 (Indicator Solution):
-- **Object Name**: `graduated_Cylinder_3` (or another cylinder)
+#### Test Tube 1 (Indicator Solution):
+- **Object Name**: `TestTube` (or the exact name from your model)
 - **Volume (ml)**: 10
 - **Temperature (°C)**: 20
 - **Contents**: `indicator`
@@ -60,14 +61,23 @@ Add initial states for each container:
 - **After Boiling**: `#ffeb3b`
 - **After Cooling**: `#ffeb3b`
 
-#### Graduated Cylinder 3 (Acid Solution):
-- **Object Name**: (use another cylinder or beaker)
+#### Test Tube 2 (Acid Solution):
+- **Object Name**: `TestTube` (same as Test Tube 1 - will be named "TestTube 1" automatically)
 - **Volume (ml)**: 20
 - **Temperature (°C)**: 20
 - **Contents**: `acid`
 - **Initial Color**: `#ff6b6b` (red - acid color)
 - **After Boiling**: `#ff6b6b`
 - **After Cooling**: `#ff6b6b`
+
+#### Test Tube 3 (Base Solution - Optional):
+- **Object Name**: `TestTube` (will be named "TestTube 2" automatically)
+- **Volume (ml)**: 20
+- **Temperature (°C)**: 20
+- **Contents**: `base`
+- **Initial Color**: `#4a90e2` (blue - base color)
+- **After Boiling**: `#4a90e2`
+- **After Cooling**: `#4a90e2`
 
 ### 4. Configure Chemical Reactions
 
@@ -95,7 +105,7 @@ Add the following reactions:
 
 Add steps in this order:
 
-#### Step 1: Measure Water
+#### Step 1: Measure Water in Cylinder
 - **Instruction**: "Measure 50 mL of water in the graduated cylinder"
 - **Equipment**: `graduated_Cylinder_2`
 - **Action**: `drag`
@@ -106,9 +116,12 @@ Add steps in this order:
 - **Equipment**: `graduated_Cylinder_2`
 - **Action**: `pour`
 - **Points**: 10
+- **Rules**:
+  - Volume in beaker should be approximately 50 mL
+  - Beaker should contain `water`
 
-#### Step 3: Transfer Indicator with Glass Rod
-- **Instruction**: "Use the glass rod to transfer indicator solution from cylinder to beaker"
+#### Step 3: Transfer Indicator from Test Tube with Glass Rod
+- **Instruction**: "Use the glass rod to transfer indicator solution from test tube to beaker"
 - **Equipment**: `Glass_Rod`
 - **Action**: `drag`
 - **Points**: 15
@@ -125,8 +138,8 @@ Add steps in this order:
   - Temperature should be > 80°C
   - Color should change to orange (`#ff9800`)
 
-#### Step 5: Transfer Acid with Glass Rod
-- **Instruction**: "Use glass rod to transfer acid solution to the heated beaker"
+#### Step 5: Transfer Acid from Test Tube with Glass Rod
+- **Instruction**: "Use glass rod to transfer acid solution from test tube to the heated beaker"
 - **Equipment**: `Glass_Rod`
 - **Action**: `drag`
 - **Points**: 15
@@ -155,10 +168,11 @@ Add steps in this order:
 - Color changes based on temperature and contents
 
 ### Color Changes
-- Initial: Water is blue, indicator is yellow
-- After mixing: Yellow solution (water + indicator)
-- After heating: Orange (heated indicator solution)
-- After adding acid: Pink (acidic solution)
+- Initial: Water is blue (in cylinder), indicator is yellow (in test tube 1), acid is red (in test tube 2)
+- After pouring water to beaker: Blue water in beaker
+- After mixing indicator: Yellow solution (water + indicator) in beaker
+- After heating: Orange (heated indicator solution) in beaker
+- After adding acid: Pink (acidic solution) in beaker
 
 ---
 

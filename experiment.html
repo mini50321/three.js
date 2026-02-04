@@ -1415,7 +1415,11 @@
                         const worldPos = engine.getWorldPositionFromMouse(fakeEvent);
                         await engine.addLabware(data.path, data.name, worldPos);
                         const modal = document.getElementById('labware-modal-overlay');
-                        if (modal) modal.style.display = 'none';
+                        if (modal) {
+                            setTimeout(() => {
+                                openLabwareModal();
+                            }, 100);
+                        }
                     }
                 });
                 

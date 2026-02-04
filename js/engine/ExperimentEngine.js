@@ -1081,12 +1081,18 @@ export class ExperimentEngine {
     async addLabware(modelPath, modelName = null, position = null) {
         console.log('addLabware called with:', { modelPath, modelName, position });
         const loader = new GLTFLoader();
-        const name = modelName || this.extractModelName(modelPath);
+        let name = modelName || this.extractModelName(modelPath);
         const lowerName = name.toLowerCase();
         
         if (this.objects.has(name)) {
-            console.warn(`Labware ${name} already exists in scene`);
-            return;
+            let counter = 1;
+            let uniqueName = `${name} ${counter}`;
+            while (this.objects.has(uniqueName)) {
+                counter++;
+                uniqueName = `${name} ${counter}`;
+            }
+            name = uniqueName;
+            console.log(`Labware ${modelName || this.extractModelName(modelPath)} already exists, using unique name: ${name}`);
         }
         
         if (lowerName.includes('table') || lowerName.includes('laboratory')) {
