@@ -1798,6 +1798,7 @@ export class ExperimentEngine {
         this.updateParticles();
         this.handleKeyboardTilt();
         this.handleSwirling();
+        this.checkPourConditions();
         this.handleCollisions();
     }
     
@@ -1834,6 +1835,47 @@ export class ExperimentEngine {
                 const spillAmount = Math.min(impact * 10, obj.properties.volume * 0.1);
                 obj.properties.volume = Math.max(0, obj.properties.volume - spillAmount);
                 this.updateLiquidMesh(obj);
+            }
+        }
+    }
+
+    checkPourConditions() {
+        const tiltController = this.interactions.get('tilt');
+        if (!tiltController) return;
+        
+        if (tiltController.pourModal || tiltController.modalJustClosed) {
+            return;
+        }
+        
+        for (const [name, obj] of this.objects) {
+            if (!obj.properties.isContainer) continue;
+            
+            const hasContents = (obj.properties.contents && 
+                                obj.properties.contents.length > 0) ||
+                               (obj.properties.volume > 0);
+            
+            if (!hasContents) continue;
+            
+            const tiltX = obj.mesh.rotation.x;
+            const tiltZ = obj.mesh.rotation.z;
+            const tiltAngle = Math.abs(tiltX) + Math.abs(tiltZ);
+            
+            if (tiltAngle < 0.2 && tiltController.hasShownModal && tiltController.activeObject === obj) {
+                tiltController.hasShownModal = false;
+                tiltController.activeObject = null;
+                tiltController.pendingPourTarget = null;
+                tiltController.modalJustClosed = false;
+            }
+            
+            if (tiltAngle > 0.3 && !tiltController.hasShownModal && !tiltController.pourModal && !tiltController.modalJustClosed) {
+                tiltController.activeObject = obj;
+                tiltController.findPourTarget();
+                if (tiltController.pendingPourTarget) {
+                    console.log('[Pour Detection] Found pour condition for:', obj.name, 'to', tiltController.pendingPourTarget.name);
+                    tiltController.showPourModal();
+                    tiltController.hasShownModal = true;
+                    break;
+                }
             }
         }
     }
