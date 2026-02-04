@@ -3027,19 +3027,19 @@ export class ExperimentEngine {
             'indicator_solution': 0x00ff00
         };
         
-        if (this.config.initialState && Array.isArray(this.config.initialState)) {
-            const initialState = this.config.initialState.find(state => state.objectName === obj.name);
-            if (initialState) {
-                if (initialState.initialColor) {
-                    const colorStr = initialState.initialColor.startsWith('#') ? initialState.initialColor : '#' + initialState.initialColor;
-                    baseColor = new THREE.Color(colorStr);
-                }
-            }
-        }
+        const initialState = this.config.initialState && Array.isArray(this.config.initialState) ? 
+            this.config.initialState.find(state => state.objectName === obj.name) : null;
+        
+        const currentVolume = this.calculateVolume(obj);
+        const initialVolume = initialState && initialState.volume ? initialState.volume : 0;
+        const hasInitialContents = Math.abs(currentVolume - initialVolume) < 0.1;
         
         if (contents.length === 1) {
             const contentType = contents[0].type?.toLowerCase() || 'water';
-            if (!this.config.initialState || !this.config.initialState.find(s => s.objectName === obj.name && s.initialColor)) {
+            if (hasInitialContents && initialState && initialState.initialColor) {
+                const colorStr = initialState.initialColor.startsWith('#') ? initialState.initialColor : '#' + initialState.initialColor;
+                baseColor = new THREE.Color(colorStr);
+            } else {
                 baseColor = new THREE.Color(colorMap[contentType] || colorMap['water']);
             }
         } else {
@@ -3056,14 +3056,12 @@ export class ExperimentEngine {
                 b += color.b * vol;
             });
             
-            if (totalVolume > 0 && (!this.config.initialState || !this.config.initialState.find(s => s.objectName === obj.name && s.initialColor))) {
+            if (totalVolume > 0 && (!hasInitialContents || !initialState || !initialState.initialColor)) {
                 baseColor = new THREE.Color(r / totalVolume, g / totalVolume, b / totalVolume);
             }
         }
         
         const temp = obj.properties.temperature || 20;
-        const initialState = this.config.initialState && Array.isArray(this.config.initialState) ? 
-            this.config.initialState.find(state => state.objectName === obj.name) : null;
         
         if (temp > 80 && initialState && initialState.boilingColor) {
             const colorStr = initialState.boilingColor.startsWith('#') ? initialState.boilingColor : '#' + initialState.boilingColor;
