@@ -962,9 +962,40 @@ export class ExperimentEngine {
         if (!this.config.initialState || !Array.isArray(this.config.initialState)) {
             return null;
         }
-        return this.config.initialState.find(state => 
-            state.objectName && state.objectName.toLowerCase() === objectName.toLowerCase()
-        );
+        const lowerObjectName = objectName.toLowerCase();
+        const numberMatch = lowerObjectName.match(/\s+(\d+)$/);
+        const instanceNumber = numberMatch ? parseInt(numberMatch[1]) : 0;
+        const normalizedObjectName = lowerObjectName.replace(/\s+\d+$/, '');
+        
+        const matchingStates = this.config.initialState.filter(state => {
+            if (!state.objectName) return false;
+            const lowerStateName = state.objectName.toLowerCase();
+            const normalizedStateName = lowerStateName.replace(/\s+\d+$/, '');
+            
+            if (lowerStateName === lowerObjectName) {
+                return true;
+            }
+            
+            if (normalizedStateName === normalizedObjectName) {
+                return true;
+            }
+            
+            return false;
+        });
+        
+        if (matchingStates.length === 0) {
+            return null;
+        }
+        
+        if (matchingStates.length === 1) {
+            return matchingStates[0];
+        }
+        
+        if (instanceNumber < matchingStates.length) {
+            return matchingStates[instanceNumber];
+        }
+        
+        return matchingStates[0];
     }
 
     storeInitialState() {
@@ -1262,6 +1293,33 @@ export class ExperimentEngine {
             const centerFinal = boxPositioned.getCenter(new THREE.Vector3());
             const centerOffset = new THREE.Vector3().subVectors(centerFinal, model.position);
             
+            const initialStateForObject = this.getInitialStateForObject(name);
+            
+            const initialVolume = initialStateForObject?.volume !== null && initialStateForObject?.volume !== undefined 
+                ? initialStateForObject.volume 
+                : 0;
+            const initialTemperature = initialStateForObject?.temperature !== null && initialStateForObject?.temperature !== undefined 
+                ? initialStateForObject.temperature 
+                : 20;
+            let initialContents = initialStateForObject?.contents && initialStateForObject.contents.length > 0
+                ? initialStateForObject.contents
+                : [];
+            
+            if (initialContents.length > 0 && typeof initialContents[0] === 'string') {
+                const volume = initialVolume || 0;
+                if (volume > 0) {
+                    initialContents = initialContents.map(content => ({
+                        type: content,
+                        volume: volume / initialContents.length
+                    }));
+                }
+            } else if (initialContents.length === 0 && initialVolume > 0) {
+                initialContents = [{
+                    type: 'water',
+                    volume: initialVolume
+                }];
+            }
+            
             const objectData = {
                 mesh: model,
                 name: name,
@@ -1273,10 +1331,10 @@ export class ExperimentEngine {
                 center: center,
                 centerOffset: centerOffset,
                 properties: {
-                    volume: 0,
+                    volume: initialVolume,
                     mass: 1,
-                    temperature: 20,
-                    contents: [],
+                    temperature: initialTemperature,
+                    contents: initialContents,
                     isContainer: modelProps.isContainer || false,
                     isScale: modelProps.isScale || (lowerName.includes('scale') || lowerName.includes('electronic')) || false,
                     capacity: modelProps.capacity || 0,
@@ -1290,9 +1348,9 @@ export class ExperimentEngine {
                     canPour: modelProps.canPour !== false
                 },
                 initialState: {
-                    volume: 0,
-                    temperature: 20,
-                    contents: []
+                    volume: initialVolume,
+                    temperature: initialTemperature,
+                    contents: [...initialContents]
                 },
                 physicsBody: null,
                 initializing: true,
@@ -1326,6 +1384,13 @@ export class ExperimentEngine {
             
             this.scene.add(model);
             this.objects.set(name, objectData);
+            
+            if (objectData.properties.isContainer && initialVolume > 0) {
+                this.measurements.volume[name] = initialVolume;
+                if (this.createLiquidMesh) {
+                    this.createLiquidMesh(objectData);
+                }
+            }
             
             if (lowerName.includes('spirit') || lowerName.includes('lamp')) {
                 this.spiritLamp = model;
@@ -3623,8 +3688,12 @@ export class ExperimentEngine {
         
         if (this.isRunning) {
             const currentStep = this.config.steps?.[this.currentStep];
-            if (currentStep && obj.name !== currentStep.equipment) {
-                this.addFeedback(`Please use ${currentStep.equipment} for this step.`);
+            if (currentStep) {
+                const objNameNormalized = obj.name.toLowerCase().replace(/_/g, ' ').trim();
+                const equipmentNameNormalized = currentStep.equipment.toLowerCase().replace(/_/g, ' ').trim();
+                if (objNameNormalized !== equipmentNameNormalized) {
+                    this.addFeedback(`Please use ${currentStep.equipment} for this step.`);
+                }
             }
         }
         
@@ -3692,7 +3761,17 @@ export class ExperimentEngine {
     }
 
     getObject(name) {
-        return this.objects.get(name);
+        if (!name) return null;
+        if (this.objects.has(name)) {
+            return this.objects.get(name);
+        }
+        const lowerName = name.toLowerCase();
+        for (const [objName, obj] of this.objects) {
+            if (objName.toLowerCase() === lowerName) {
+                return obj;
+            }
+        }
+        return null;
     }
 
     getAllObjects() {
@@ -3748,6 +3827,8 @@ export class ExperimentEngine {
                 return this.validateStir(equipment, step);
             case 'measure':
                 return this.validateMeasure(equipment, step);
+            case 'drag':
+                return this.validateDrag(equipment, step);
             default:
                 return { valid: false, message: `Unknown action: ${step.action}` };
         }
@@ -3761,7 +3842,22 @@ export class ExperimentEngine {
 
         if (rules.conditions) {
             for (const condition of rules.conditions) {
-                const result = this.checkCondition(equipment, condition);
+                let targetEquipment = equipment;
+                if (condition.targetObject) {
+                    const targetObj = this.getObject(condition.targetObject);
+                    if (targetObj) {
+                        targetEquipment = targetObj;
+                    }
+                } else if ((step.action === 'pour' || step.action === 'drag') && condition.message) {
+                    const messageLower = condition.message.toLowerCase();
+                    if (messageLower.includes('beaker')) {
+                        const beaker = this.getObject('Beaker') || this.getObject('beaker');
+                        if (beaker) {
+                            targetEquipment = beaker;
+                        }
+                    }
+                }
+                const result = this.checkCondition(targetEquipment, condition);
                 if (!result.valid) {
                     allValid = false;
                     errors.push(result.message);
@@ -3785,7 +3881,14 @@ export class ExperimentEngine {
         }
 
         if (rules.volume) {
-            const volume = this.measurements.volume[equipment.name] || 0;
+            let volumeEquipment = equipment;
+            if (step.action === 'pour' || step.action === 'drag') {
+                const beaker = this.getObject('Beaker') || this.getObject('beaker');
+                if (beaker) {
+                    volumeEquipment = beaker;
+                }
+            }
+            const volume = this.measurements.volume[volumeEquipment.name] || 0;
             const target = rules.volume.target;
             const tolerance = rules.volume.tolerance || 10;
             
@@ -3843,11 +3946,14 @@ export class ExperimentEngine {
                 }
                 break;
             case 'hasContent':
-                if (equipment.properties.contents.length === 0) {
+                if (!equipment.properties.contents || equipment.properties.contents.length === 0) {
                     return { valid: false, message: condition.message || 'Container should have contents' };
                 }
                 if (condition.value) {
-                    const contentTypes = equipment.properties.contents.map(c => c.type || c).map(t => String(t).toLowerCase());
+                    const contentTypes = equipment.properties.contents
+                        .filter(c => c && (c.volume || 0) > 0.001)
+                        .map(c => c.type || c)
+                        .map(t => String(t).toLowerCase());
                     const targetContent = String(condition.value).toLowerCase();
                     const hasTarget = contentTypes.includes(targetContent);
                     return { 
@@ -3924,6 +4030,16 @@ export class ExperimentEngine {
             return { valid: true, points: step.points || 15, message: 'Measurement correct' };
         }
         return { valid: false, message: step.errorMessage || `Measurement incorrect. Target: ${target}, Current: ${currentValue.toFixed(1)}` };
+    }
+
+    validateDrag(equipment, step) {
+        if (step.rules && step.rules.length > 0) {
+            return this.validateRules(equipment, step);
+        }
+        if (step.targetValue !== undefined) {
+            return this.validateMeasure(equipment, step);
+        }
+        return { valid: true, points: step.points || 10, message: 'Object dragged successfully' };
     }
 
     addFeedback(message) {
