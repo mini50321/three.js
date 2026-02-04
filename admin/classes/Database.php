@@ -292,15 +292,33 @@ class Database {
         $stateStmt->execute([$id]);
         $states = $stateStmt->fetchAll(PDO::FETCH_ASSOC);
         
+        $configInitialState = $config['initialState'] ?? [];
         $initialState = [];
         foreach ($states as $state) {
+            $objectName = $state['object_name'];
+            $configState = null;
+            foreach ($configInitialState as $cs) {
+                if (isset($cs['objectName']) && $cs['objectName'] === $objectName) {
+                    $configState = $cs;
+                    break;
+                }
+            }
+            
             $initialState[] = [
-                'objectName' => $state['object_name'],
+                'objectName' => $objectName,
                 'volume' => $state['volume'],
                 'temperature' => $state['temperature'],
-                'contents' => !empty($state['contents_json']) ? json_decode($state['contents_json'], true) : []
+                'contents' => !empty($state['contents_json']) ? json_decode($state['contents_json'], true) : [],
+                'initialColor' => $configState['initialColor'] ?? null,
+                'boilingColor' => $configState['boilingColor'] ?? null,
+                'coolingColor' => $configState['coolingColor'] ?? null
             ];
         }
+        
+        if (empty($initialState) && !empty($configInitialState)) {
+            $initialState = $configInitialState;
+        }
+        
         $exp['initialState'] = $initialState;
         
         return $exp;
