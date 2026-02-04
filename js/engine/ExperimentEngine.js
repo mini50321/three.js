@@ -3006,7 +3006,9 @@ export class ExperimentEngine {
             'copper': 0xb87333,
             'iron': 0x808080,
             'phenolphthalein': 0xffffff,
-            'litmus': 0x9370db
+            'litmus': 0x9370db,
+            'universal_indicator': 0x00ff00,
+            'indicator_solution': 0x00ff00
         };
         
         if (this.config.initialState && Array.isArray(this.config.initialState)) {
@@ -4206,10 +4208,20 @@ export class ExperimentEngine {
             this.measurements.volume[rodObj.name] = rodObj.properties.volume;
             this.measurements.volume[nearbyContainer.name] = this.calculateVolume(nearbyContainer);
             
+            if (this.checkChemicalReaction) {
+                const reaction = this.checkChemicalReaction(nearbyContainer);
+                if (reaction) {
+                    this.processChemicalReaction(nearbyContainer, reaction);
+                }
+            }
+            
             if (this.updateLiquidMesh) {
                 this.updateLiquidMesh(rodObj);
                 this.updateLiquidMesh(nearbyContainer);
             }
+            
+            this.updateMeasurements(rodObj);
+            this.updateMeasurements(nearbyContainer);
             
             if (rodObj.properties.volume <= 0 && this.liquidMeshes.has(rodObj.name)) {
                 const liquidMesh = this.liquidMeshes.get(rodObj.name);
