@@ -82,7 +82,40 @@ export class ScaleController {
         }
         
         this.objectOnScale = object;
-        this.currentWeight = this.engine.measurements.mass[object.name] || 0;
+        
+        let calculatedWeight = 0;
+        if (object.properties.isContainer && this.engine.calculateVolume) {
+            const volume = this.engine.calculateVolume(object);
+            if (volume > 0 && object.properties.contents && object.properties.contents.length > 0) {
+                const densityMap = {
+                    'water': 1.0,
+                    'acid': 1.05,
+                    'base': 1.0,
+                    'indicator': 1.0,
+                    'indicator_solution': 1.0,
+                    'heated_indicator': 1.0,
+                    'acidic_solution': 1.05,
+                    'salt': 1.2,
+                    'sugar': 1.6,
+                    'alcohol': 0.79,
+                    'oil': 0.92
+                };
+                
+                let totalWeight = 0;
+                object.properties.contents.forEach(content => {
+                    const contentType = (content.type || 'water').toLowerCase();
+                    const contentVolume = content.volume || 0;
+                    const density = densityMap[contentType] || 1.0;
+                    totalWeight += contentVolume * density;
+                });
+                calculatedWeight = totalWeight;
+            } else if (volume > 0) {
+                calculatedWeight = volume * 1.0;
+            }
+        }
+        
+        const existingWeight = this.engine.measurements.mass[object.name];
+        this.currentWeight = existingWeight !== undefined && existingWeight > 0 ? existingWeight : calculatedWeight;
         
         const popup = document.createElement('div');
         popup.id = 'scale-popup';
