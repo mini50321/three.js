@@ -296,6 +296,11 @@ export class TiltController {
             const amount = parseFloat(input.value) || 0;
             if (amount > 0 && amount <= maxPour) {
                 this.executePour(amount);
+                setTimeout(() => {
+                    if (typeof window.updateMeasurements === 'function') {
+                        window.updateMeasurements();
+                    }
+                }, 100);
             }
             this.hidePourModal();
         };
@@ -382,13 +387,33 @@ export class TiltController {
                 }
             }
             
-            this.engine.measurements.volume[this.activeObject.name] = this.engine.calculateVolume(this.activeObject);
-            this.engine.measurements.volume[this.pendingPourTarget.name] = this.engine.calculateVolume(this.pendingPourTarget);
+            const newSourceVolume = this.engine.calculateVolume(this.activeObject);
+            const newTargetVolume = this.engine.calculateVolume(this.pendingPourTarget);
+            
+            this.engine.measurements.volume[this.activeObject.name] = newSourceVolume;
+            this.engine.measurements.volume[this.pendingPourTarget.name] = newTargetVolume;
+            
+            this.activeObject.properties.volume = newSourceVolume;
+            this.pendingPourTarget.properties.volume = newTargetVolume;
+            
+            console.log('[executePour] Volumes updated:', {
+                source: { name: this.activeObject.name, volume: newSourceVolume, contents: this.activeObject.properties.contents },
+                target: { name: this.pendingPourTarget.name, volume: newTargetVolume, contents: this.pendingPourTarget.properties.contents }
+            });
             
             if (this.engine.updateLiquidMesh) {
                 this.engine.updateLiquidMesh(this.activeObject);
                 this.engine.updateLiquidMesh(this.pendingPourTarget);
             }
+            
+            setTimeout(() => {
+                if (typeof window.updateMeasurements === 'function') {
+                    console.log('[executePour] Calling updateMeasurements()');
+                    window.updateMeasurements();
+                } else {
+                    console.warn('[executePour] window.updateMeasurements is not available');
+                }
+            }, 50);
         }
     }
     

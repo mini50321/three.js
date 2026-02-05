@@ -1166,14 +1166,24 @@
         }
 
         function updateMeasurements() {
+            console.log('[updateMeasurements] Function called');
             const measurementItems = document.getElementById('measurement-items');
+            if (!measurementItems) {
+                console.warn('[updateMeasurements] measurement-items element not found');
+                return;
+            }
             measurementItems.innerHTML = '';
             
-            if (!engine) return;
+            if (!engine) {
+                console.warn('[updateMeasurements] Engine not available');
+                return;
+            }
             
             for (const [name, obj] of engine.objects) {
                 if (obj.properties.isContainer) {
-                    const volume = engine.measurements.volume[name] || 0;
+                    const volume = engine.calculateVolume(obj);
+                    engine.measurements.volume[name] = volume;
+                    console.log(`[updateMeasurements] ${name}: ${volume.toFixed(1)}ml (contents:`, obj.properties.contents, ')');
                     const item = document.createElement('div');
                     item.className = 'measurement-item';
                     item.innerHTML = `<span>${name} Volume:</span><span>${volume.toFixed(1)} ml</span>`;
@@ -1197,6 +1207,8 @@
                 }
             }
         }
+        
+        window.updateMeasurements = updateMeasurements;
 
         document.getElementById('start-btn').addEventListener('click', () => {
             try {

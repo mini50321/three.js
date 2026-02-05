@@ -2991,8 +2991,13 @@ export class ExperimentEngine {
             });
         }
         
-        if (totalVolume === 0 && obj.properties.volume !== undefined && obj.properties.volume > 0) {
-            totalVolume = obj.properties.volume;
+        if (totalVolume === 0) {
+            if (obj.properties.contents && Array.isArray(obj.properties.contents) && obj.properties.contents.length === 0) {
+                return 0;
+            }
+            if (obj.properties.volume !== undefined && obj.properties.volume > 0) {
+                totalVolume = obj.properties.volume;
+            }
         }
         
         return Math.min(totalVolume, obj.properties.capacity || 1000);
