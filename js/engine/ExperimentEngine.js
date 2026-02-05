@@ -3175,12 +3175,30 @@ export class ExperimentEngine {
             'universal_indicator': 0x00ff00,
             'indicator': 0xffeb3b,
             'indicator_solution': 0xffeb3b,
+            'yellow_solution': 0xffeb3b,
             'heated_indicator': 0xff9800,
             'acidic_solution': 0xe91e63
         };
         
-        const initialState = this.config.initialState && Array.isArray(this.config.initialState) ? 
-            this.config.initialState.find(state => state.objectName === obj.name) : null;
+        const getInitialStateForObject = (objectName) => {
+            if (!this.config.initialState || !Array.isArray(this.config.initialState)) {
+                return null;
+            }
+            const lowerObjectName = objectName.toLowerCase();
+            const normalizedObjectName = lowerObjectName.replace(/\s+\d+$/, '');
+            
+            for (const state of this.config.initialState) {
+                if (!state.objectName) continue;
+                const lowerStateName = state.objectName.toLowerCase();
+                const normalizedStateName = lowerStateName.replace(/\s+\d+$/, '');
+                if (normalizedStateName === normalizedObjectName || lowerStateName === lowerObjectName) {
+                    return state;
+                }
+            }
+            return null;
+        };
+        
+        const initialState = getInitialStateForObject(obj.name);
         
         const currentVolume = this.calculateVolume(obj);
         const initialVolume = initialState && initialState.volume ? initialState.volume : 0;
