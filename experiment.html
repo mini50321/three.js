@@ -640,6 +640,12 @@
                     <p id="transfer-tool-hint" style="color: #aaa; font-size: 11px; margin-top: 5px; margin-bottom: 0;">Position the tool near a container, then click Fill or Draw</p>
                 </div>
 
+                <div id="scale-controls" style="margin-bottom: 15px; display: none;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #fff;">Scale Controls</label>
+                    <button id="weigh-btn" style="width: 100%; padding: 10px; background: linear-gradient(135deg, #9b8cff 0%, #ff2ea8 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500;">Weigh</button>
+                    <p id="scale-object-name" style="color: #aaa; font-size: 11px; margin-top: 5px; margin-bottom: 0;"></p>
+                </div>
+
                 <div style="margin-top: 15px; padding: 10px; background: #2a2a2a; border-radius: 6px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                         <span style="color: #aaa; font-size: 13px;">Timer:</span>
@@ -1060,6 +1066,21 @@
                 });
             }
 
+            const weighBtn = document.getElementById('weigh-btn');
+            if (weighBtn) {
+                weighBtn.addEventListener('click', () => {
+                    if (engine && engine.scaleController && engine.scaleController.objectOnScale) {
+                        engine.scaleController.showScalePopup(engine.scaleController.objectOnScale);
+                    }
+                });
+            }
+
+            setInterval(() => {
+                if (engine && engine.scaleController) {
+                    engine.scaleController.checkAndUpdateScaleButton();
+                }
+            }, 500);
+
             setInterval(() => {
                 if (engine && engine.selectedObject) {
                     const obj = engine.selectedObject;
@@ -1164,6 +1185,14 @@
                     const item = document.createElement('div');
                     item.className = 'measurement-item';
                     item.innerHTML = `<span>${name} Temp:</span><span>${temp.toFixed(1)} °C</span>`;
+                    measurementItems.appendChild(item);
+                }
+                
+                const mass = engine.measurements.mass[name];
+                if (mass !== undefined && mass !== null && mass > 0) {
+                    const item = document.createElement('div');
+                    item.className = 'measurement-item';
+                    item.innerHTML = `<span>${name} Weight:</span><span>${mass.toFixed(2)} g</span>`;
                     measurementItems.appendChild(item);
                 }
             }

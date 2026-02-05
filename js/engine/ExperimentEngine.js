@@ -1920,6 +1920,10 @@ export class ExperimentEngine {
             }
         }
         
+        if (this.scaleController) {
+            this.scaleController.checkAndUpdateScaleButton();
+        }
+        
         this.updateParticles();
         this.handleKeyboardTilt();
         this.handleSwirling();

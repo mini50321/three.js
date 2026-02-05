@@ -14,11 +14,14 @@ export class ScaleController {
         for (const [name, obj] of this.engine.objects) {
             if (name.toLowerCase().includes('scale') || 
                 name.toLowerCase().includes('electronic_scale') ||
+                name.toLowerCase().includes('electronic scale') ||
                 obj.properties.isScale) {
                 this.scaleObject = obj;
+                console.log('[ScaleController] Found scale object:', name);
                 return obj;
             }
         }
+        console.warn('[ScaleController] Scale object not found!');
         return null;
     }
 
@@ -38,28 +41,37 @@ export class ScaleController {
         const scaleSize = scaleBox.getSize(new THREE.Vector3());
         const scaleTopY = scaleBox.max.y;
         const scaleTopArea = {
-            minX: scaleCenter.x - scaleSize.x * 0.3,
-            maxX: scaleCenter.x + scaleSize.x * 0.3,
-            minZ: scaleCenter.z - scaleSize.z * 0.3,
-            maxZ: scaleCenter.z + scaleSize.z * 0.3,
+            minX: scaleCenter.x - scaleSize.x * 0.4,
+            maxX: scaleCenter.x + scaleSize.x * 0.4,
+            minZ: scaleCenter.z - scaleSize.z * 0.4,
+            maxZ: scaleCenter.z + scaleSize.z * 0.4,
             y: scaleTopY + 0.05
         };
         
         const objectBottomY = objectBox.min.y;
+        const objectTopY = objectBox.max.y;
         const horizontalDistance = Math.sqrt(
             Math.pow(objectCenter.x - scaleCenter.x, 2) + 
             Math.pow(objectCenter.z - scaleCenter.z, 2)
         );
+        
+        const verticalDistance = objectBottomY - scaleTopY;
+        const maxVerticalGap = 0.5;
+        const maxHorizontalDistance = Math.max(scaleSize.x * 0.5, scaleSize.z * 0.5);
         
         const isOnScale = (
             objectCenter.x >= scaleTopArea.minX &&
             objectCenter.x <= scaleTopArea.maxX &&
             objectCenter.z >= scaleTopArea.minZ &&
             objectCenter.z <= scaleTopArea.maxZ &&
-            objectBottomY <= scaleTopArea.y &&
-            objectBottomY >= scaleTopArea.y - 0.2 &&
-            horizontalDistance < scaleSize.x * 0.4
+            verticalDistance >= -0.1 &&
+            verticalDistance <= maxVerticalGap &&
+            horizontalDistance < maxHorizontalDistance
         );
+        
+        if (isOnScale) {
+            console.log('[ScaleController] Object', object.name, 'is on scale. Distance:', horizontalDistance.toFixed(3), 'Y diff:', (objectBottomY - scaleTopArea.y).toFixed(3));
+        }
         
         return isOnScale;
     }
@@ -218,16 +230,71 @@ export class ScaleController {
             this.scalePopup.remove();
             this.scalePopup = null;
         }
-        this.objectOnScale = null;
     }
 
     onObjectPlaced(object) {
         if (this.checkObjectOnScale(object)) {
             setTimeout(() => {
                 if (this.checkObjectOnScale(object)) {
-                    this.showScalePopup(object);
+                    this.objectOnScale = object;
+                    this.updateScaleButton();
                 }
             }, 300);
+        } else {
+            this.objectOnScale = null;
+            this.updateScaleButton();
+        }
+    }
+
+    updateScaleButton() {
+        const scaleControls = document.getElementById('scale-controls');
+        const scaleObjectName = document.getElementById('scale-object-name');
+        
+        console.log('[ScaleController] updateScaleButton called, objectOnScale:', this.objectOnScale ? this.objectOnScale.name : 'null');
+        
+        if (scaleControls) {
+            if (this.objectOnScale) {
+                scaleControls.style.display = 'block';
+                if (scaleObjectName) {
+                    scaleObjectName.textContent = `Object on scale: ${this.objectOnScale.name}`;
+                }
+                console.log('[ScaleController] Scale button shown');
+            } else {
+                scaleControls.style.display = 'none';
+                if (scaleObjectName) {
+                    scaleObjectName.textContent = '';
+                }
+                console.log('[ScaleController] Scale button hidden');
+            }
+        } else {
+            console.warn('[ScaleController] scale-controls element not found!');
+        }
+    }
+
+    checkAndUpdateScaleButton() {
+        if (!this.scaleObject) {
+            this.findScaleObject();
+        }
+        
+        if (!this.scaleObject) {
+            this.objectOnScale = null;
+            this.updateScaleButton();
+            return;
+        }
+
+        let foundObject = null;
+        for (const [name, obj] of this.engine.objects) {
+            if (obj !== this.scaleObject && this.checkObjectOnScale(obj)) {
+                foundObject = obj;
+                console.log('[ScaleController] Found object on scale:', obj.name);
+                break;
+            }
+        }
+
+        if (foundObject !== this.objectOnScale) {
+            console.log('[ScaleController] Object on scale changed:', foundObject ? foundObject.name : 'none');
+            this.objectOnScale = foundObject;
+            this.updateScaleButton();
         }
     }
 }
