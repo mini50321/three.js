@@ -2223,6 +2223,26 @@ export class ExperimentEngine {
         obj.mesh.rotation.x = obj.mesh.userData.originalRotation.x + Math.sin(time * 2) * this.swirlTiltAmount;
         obj.mesh.rotation.z = obj.mesh.userData.originalRotation.z + Math.cos(time * 2) * this.swirlTiltAmount;
         
+        const objName = obj.name.toLowerCase();
+        const isStirringTool = objName.includes('rod') || objName.includes('dropper') || objName.includes('stir');
+        
+        if (isStirringTool) {
+            const nearbyContainer = this.findNearbyContainer(obj, 0.5);
+            if (nearbyContainer && nearbyContainer.properties.isContainer) {
+                if (!nearbyContainer.properties.stirCount) {
+                    nearbyContainer.properties.stirCount = 0;
+                }
+                const currentTime = performance.now();
+                if (!nearbyContainer.lastStirTime) {
+                    nearbyContainer.lastStirTime = currentTime;
+                }
+                if (currentTime - nearbyContainer.lastStirTime > 500) {
+                    nearbyContainer.properties.stirCount = (nearbyContainer.properties.stirCount || 0) + 1;
+                    nearbyContainer.lastStirTime = currentTime;
+                }
+            }
+        }
+        
         obj.mesh.updateMatrixWorld(true);
     }
 
@@ -3839,10 +3859,16 @@ export class ExperimentEngine {
         if (this.isRunning) {
             const currentStep = this.config.steps?.[this.currentStep];
             if (currentStep) {
-                const objNameNormalized = obj.name.toLowerCase().replace(/_/g, ' ').trim();
-                const equipmentNameNormalized = currentStep.equipment.toLowerCase().replace(/_/g, ' ').trim();
+                const objNameNormalized = obj.name.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+                const equipmentNameNormalized = currentStep.equipment.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
                 if (objNameNormalized !== equipmentNameNormalized) {
-                    this.addFeedback(`Please use ${currentStep.equipment} for this step.`);
+                    const objNameParts = objNameNormalized.split(' ');
+                    const equipmentNameParts = equipmentNameNormalized.split(' ');
+                    const isMatch = objNameParts.every(part => equipmentNameParts.includes(part)) || 
+                                   equipmentNameParts.every(part => objNameParts.includes(part));
+                    if (!isMatch) {
+                        this.addFeedback(`Please use ${currentStep.equipment} for this step.`);
+                    }
                 }
             }
         }
@@ -3915,9 +3941,14 @@ export class ExperimentEngine {
         if (this.objects.has(name)) {
             return this.objects.get(name);
         }
-        const lowerName = name.toLowerCase();
+        const lowerName = name.toLowerCase().trim();
+        const normalizedName = lowerName.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+        
         for (const [objName, obj] of this.objects) {
-            if (objName.toLowerCase() === lowerName) {
+            const lowerObjName = objName.toLowerCase().trim();
+            const normalizedObjName = lowerObjName.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+            
+            if (lowerObjName === lowerName || normalizedObjName === normalizedName) {
                 return obj;
             }
         }
@@ -3957,8 +3988,18 @@ export class ExperimentEngine {
     }
 
     checkStepConditions(step) {
-        const equipment = this.getObject(step.equipment);
+        if (!step.equipment) {
+            return { valid: false, message: 'No equipment specified for this step' };
+        }
+        
+        let equipment = this.getObject(step.equipment);
         if (!equipment) {
+            const normalizedEquipment = step.equipment.toLowerCase().replace(/_/g, ' ').trim();
+            equipment = this.getObject(normalizedEquipment);
+        }
+        if (!equipment) {
+            const allObjectNames = Array.from(this.objects.keys()).join(', ');
+            console.warn(`Equipment "${step.equipment}" not found. Available objects: ${allObjectNames}`);
             return { valid: false, message: `Equipment ${step.equipment} not found` };
         }
 
@@ -3998,13 +4039,26 @@ export class ExperimentEngine {
                     if (targetObj) {
                         targetEquipment = targetObj;
                     }
-                } else if ((step.action === 'pour' || step.action === 'drag') && condition.message) {
+                } else if ((step.action === 'pour' || step.action === 'drag' || step.action === 'stir') && condition.message) {
                     const messageLower = condition.message.toLowerCase();
-                    if (messageLower.includes('beaker')) {
+                    if (messageLower.includes('beaker') || messageLower.includes('solution') || messageLower.includes('mixed')) {
                         const beaker = this.getObject('Beaker') || this.getObject('beaker');
                         if (beaker) {
                             targetEquipment = beaker;
                         }
+                    }
+                } else if (step.action === 'stir') {
+                    let beaker = this.getObject('Beaker') || this.getObject('beaker');
+                    if (!beaker) {
+                        for (const [name, obj] of this.objects) {
+                            if (obj.properties.isContainer && name.toLowerCase().includes('beaker')) {
+                                beaker = obj;
+                                break;
+                            }
+                        }
+                    }
+                    if (beaker) {
+                        targetEquipment = beaker;
                     }
                 }
                 const result = this.checkCondition(targetEquipment, condition);
@@ -4032,8 +4086,16 @@ export class ExperimentEngine {
 
         if (rules.volume) {
             let volumeEquipment = equipment;
-            if (step.action === 'pour' || step.action === 'drag') {
-                const beaker = this.getObject('Beaker') || this.getObject('beaker');
+            if (step.action === 'pour' || step.action === 'drag' || step.action === 'stir') {
+                let beaker = this.getObject('Beaker') || this.getObject('beaker');
+                if (!beaker) {
+                    for (const [name, obj] of this.objects) {
+                        if (obj.properties.isContainer && name.toLowerCase().includes('beaker')) {
+                            beaker = obj;
+                            break;
+                        }
+                    }
+                }
                 if (beaker) {
                     volumeEquipment = beaker;
                 }
@@ -4106,12 +4168,32 @@ export class ExperimentEngine {
                         .map(t => String(t).toLowerCase());
                     const targetContent = String(condition.value).toLowerCase();
                     const hasTarget = contentTypes.includes(targetContent);
+                    
+                    if (!hasTarget && this.config.reactions) {
+                        const reactions = Array.isArray(this.config.reactions) ? this.config.reactions : [];
+                        const reactionForContent = reactions.find(r => {
+                            if (!r.reactants || !r.result) return false;
+                            const reactants = Array.isArray(r.reactants) ? r.reactants : (r.reactants.split ? r.reactants.split(',').map(s => s.trim()) : []);
+                            const resultType = String(r.result.type || '').toLowerCase();
+                            return reactants.some(reactant => String(reactant).toLowerCase() === targetContent) &&
+                                   contentTypes.includes(resultType);
+                        });
+                        if (reactionForContent) {
+                            return { 
+                                valid: true, 
+                                points: condition.points || 0,
+                                message: condition.message || `Container contains ${reactionForContent.result.type} (reaction product)` 
+                            };
+                        }
+                    }
+                    
                     return { 
                         valid: hasTarget, 
+                        points: hasTarget ? (condition.points || 0) : 0,
                         message: condition.message || `Container should contain ${condition.value}` 
                     };
                 }
-                return { valid: true, message: condition.message || 'Container has contents' };
+                return { valid: true, points: condition.points || 0, message: condition.message || 'Container has contents' };
             case 'empty':
                 return { valid: equipment.properties.contents.length === 0, message: condition.message || 'Container should be empty' };
         }

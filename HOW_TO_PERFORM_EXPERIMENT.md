@@ -80,12 +80,12 @@
 6. **Click the "Draw" button**
    - This releases the yellow solution from the dropper into the beaker
    - The yellow solution will mix with the blue water
-   - At this point, you might see both colors (blue and yellow) in the beaker
+   - **Important**: The chemical reaction happens immediately, so the beaker will turn **green** right away (blue + yellow = green)
 
 **Visual Result:**
 - Test Tube: Now has ~10ml yellow solution (20ml - 10ml = 10ml)
 - Beaker: Has ~60ml total (50ml blue water + 10ml yellow solution)
-- The beaker shows both blue and yellow colors (not yet fully mixed)
+- **The beaker shows green solution** (the reaction happens immediately when both substances are together)
 
 **After completing:**
 - **Click "Validate Step"** button
@@ -98,7 +98,7 @@
 **Current Step should show:** "Stir the solution in the beaker to mix the blue and yellow solutions"
 
 **What you'll see:**
-- A beaker with blue and yellow liquids (not fully mixed yet)
+- A beaker with **green solution** (the reaction already happened in Step 2)
 - A stirring rod or glass rod available
 
 **How to stir:**
@@ -110,17 +110,18 @@
    - Move your mouse in circles while holding the button
    - The rod will move in a circular pattern
 5. Continue stirring for 2-3 seconds
-6. The blue and yellow solutions will mix together
-7. The color will change from blue+yellow to **green** (blue + yellow = green)
+6. The solution is already green from the reaction in Step 2
+7. Stirring ensures the solution is fully mixed and uniform
 
 **Visual Result:**
 - Beaker: Contains ~60ml of **green solution** (fully mixed)
-- The liquid is uniform green color (no separate blue/yellow visible)
+- The liquid is uniform green color
 
-**Why it turns green:**
-- This is a chemical reaction: `water + yellow_solution = mixed_solution (green)`
-- The system detects both contents in the beaker and triggers the reaction
-- The reaction changes the content type to `mixed_solution` and color to green
+**Why it's already green:**
+- The chemical reaction happened immediately in Step 2: `water + yellow_solution = mixed_solution (green)`
+- When you transferred the yellow solution to the beaker, the system detected both contents and triggered the reaction automatically
+- The reaction changed the content type to `mixed_solution` and color to green
+- Stirring ensures the solution is fully mixed and uniform
 
 **After completing:**
 - **Click "Validate Step"** button

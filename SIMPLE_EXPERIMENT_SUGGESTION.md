@@ -71,12 +71,12 @@ A very simple experiment that demonstrates all required interactions: **tilt, po
 6. **Click the "Draw" button**
    - This releases the yellow solution from the dropper into the beaker
    - The yellow solution will mix with the blue water
-   - At this point, you might see both colors (blue and yellow) in the beaker
+   - **Important**: The chemical reaction happens immediately, so the beaker will turn **green** right away (blue + yellow = green)
 
 **Visual Result:**
 - Test Tube: Now has ~10ml yellow solution (20ml - 10ml = 10ml)
 - Beaker: Has ~60ml total (50ml blue water + 10ml yellow solution)
-- The beaker shows both blue and yellow colors (not yet fully mixed)
+- **The beaker shows green solution** (the reaction happens immediately when both substances are together)
 
 **Action Type**: `drag`
 **Equipment**: `Dropper`
@@ -86,7 +86,7 @@ A very simple experiment that demonstrates all required interactions: **tilt, po
 ### Step 3: Stir the Solution
 
 **What the student sees:**
-- A beaker with blue and yellow liquids (not fully mixed yet)
+- A beaker with **green solution** (the reaction already happened in Step 2)
 - A stirring rod or glass rod available
 
 **What the student needs to do:**
@@ -97,20 +97,21 @@ A very simple experiment that demonstrates all required interactions: **tilt, po
    - Move the mouse in circles while holding the button
    - The rod will move in a circular pattern
 5. Continue stirring for 2-3 seconds
-6. The blue and yellow solutions will mix together
-7. The color will change from blue+yellow to **green** (blue + yellow = green)
+6. The solution is already green from the reaction in Step 2
+7. Stirring ensures the solution is fully mixed and uniform
 
 **Visual Result:**
 - Beaker: Contains ~60ml of **green solution** (fully mixed)
-- The liquid is uniform green color (no separate blue/yellow visible)
+- The liquid is uniform green color
 
 **Action Type**: `stir`
 **Equipment**: `Stirring Rod` or `Glass_Rod`
 
-**Why it turns green:**
-- This is a chemical reaction: `water + yellow_solution = mixed_solution (green)`
-- The system detects both contents in the beaker and triggers the reaction
-- The reaction changes the content type to `mixed_solution` and color to green
+**Why it's already green:**
+- The chemical reaction happened immediately in Step 2: `water + yellow_solution = mixed_solution (green)`
+- When the yellow solution was transferred to the beaker, the system detected both contents and triggered the reaction automatically
+- The reaction changed the content type to `mixed_solution` and color to green
+- Stirring ensures the solution is fully mixed and uniform
 
 ---
 
@@ -320,9 +321,11 @@ Click **"Add Reaction"**:
 5. **Add Content Rule:**
    - Click **"+ Add Custom Condition"**
    - **Type**: `Has Content`
-   - **Value**: `yellow_solution` (or `water` if reaction hasn't triggered yet)
+   - **Operator**: (leave empty or select "Equals (==)" - operators don't apply to Has Content)
+   - **Value**: `mixed_solution` (this is what the beaker contains after the reaction)
    - **Points**: `5`
-   - **Custom Message**: `"Beaker should contain yellow solution"`
+   - **Custom Message**: `"Beaker should contain mixed solution (green)"`
+   - **Note**: Since the reaction happens immediately, the beaker will contain `mixed_solution`, not `yellow_solution`
 
 6. Click **"Save Rules"**
 
@@ -430,7 +433,7 @@ Click **"Add Reaction"**:
 
 ### After Step 2 (Dropper Transfer):
 - **Cylinder**: Empty
-- **Beaker**: Blue water (50ml) + Yellow solution (10ml) - both colors visible, not mixed
+- **Beaker**: Green solution (60ml) - reaction happened immediately (blue + yellow = green)
 - **Test Tube**: Yellow solution (10ml) - reduced from 20ml
 
 ### After Step 3 (Stir):
