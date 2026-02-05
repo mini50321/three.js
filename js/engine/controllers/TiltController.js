@@ -292,15 +292,9 @@ export class TiltController {
         const handleConfirm = (e) => {
             e.preventDefault();
             e.stopPropagation();
-            console.log('[TiltController] Confirm button clicked');
             const amount = parseFloat(input.value) || 0;
             if (amount > 0 && amount <= maxPour) {
                 this.executePour(amount);
-                setTimeout(() => {
-                    if (typeof window.updateMeasurements === 'function') {
-                        window.updateMeasurements();
-                    }
-                }, 100);
             }
             this.hidePourModal();
         };
@@ -396,11 +390,6 @@ export class TiltController {
             this.activeObject.properties.volume = newSourceVolume;
             this.pendingPourTarget.properties.volume = newTargetVolume;
             
-            console.log('[executePour] Volumes updated:', {
-                source: { name: this.activeObject.name, volume: newSourceVolume, contents: this.activeObject.properties.contents },
-                target: { name: this.pendingPourTarget.name, volume: newTargetVolume, contents: this.pendingPourTarget.properties.contents }
-            });
-            
             if (this.engine.updateLiquidMesh) {
                 this.engine.updateLiquidMesh(this.activeObject);
                 this.engine.updateLiquidMesh(this.pendingPourTarget);
@@ -408,10 +397,7 @@ export class TiltController {
             
             setTimeout(() => {
                 if (typeof window.updateMeasurements === 'function') {
-                    console.log('[executePour] Calling updateMeasurements()');
                     window.updateMeasurements();
-                } else {
-                    console.warn('[executePour] window.updateMeasurements is not available');
                 }
             }, 50);
         }
