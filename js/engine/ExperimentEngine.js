@@ -1172,7 +1172,7 @@ export class ExperimentEngine {
                 modelProps.canPour = true;
                 modelProps.canHeat = false;
                 defaultScale = 1.2;
-            } else if (lowerName.includes('rod') || lowerName.includes('glass rod')) {
+            } else if (lowerName.includes('rod') || lowerName.includes('glass rod') || lowerName.includes('dropper')) {
                 modelProps.isContainer = true;
                 modelProps.capacity = 50;
                 modelProps.canPour = false;
@@ -3279,7 +3279,7 @@ export class ExperimentEngine {
         }
         
         const objName = obj.name.toLowerCase();
-        const isRod = objName.includes('rod') || objName.includes('glass rod');
+        const isRod = objName.includes('rod') || objName.includes('glass rod') || objName.includes('dropper');
         const isCylinder = objName.includes('cylinder') || objName.includes('graduated');
         
         let radius;
@@ -3367,7 +3367,7 @@ export class ExperimentEngine {
         const size = box.getSize(new THREE.Vector3());
         const minYWorld = box.min.y;
         const objName = obj.name.toLowerCase();
-        const isRod = objName.includes('rod') || objName.includes('glass rod');
+        const isRod = objName.includes('rod') || objName.includes('glass rod') || objName.includes('dropper');
         const isCylinder = objName.includes('cylinder') || objName.includes('graduated');
         
         let radius;
@@ -4336,7 +4336,8 @@ export class ExperimentEngine {
         const nearbyContainer = this.findNearbyContainer(rodObj);
         if (!nearbyContainer) {
             console.log('No nearby container found');
-            return { success: false, message: 'No nearby container found. Position the glass rod closer to a container.' };
+            const toolName = rodObj.name.toLowerCase().includes('dropper') ? 'dropper' : 'glass rod';
+            return { success: false, message: `No nearby container found. Position the ${toolName} closer to a container.` };
         }
         
         if (nearbyContainer.properties.contents.length === 0) {
@@ -4393,7 +4394,8 @@ export class ExperimentEngine {
             console.log(`Filled ${rodObj.name} with ${actualTransfer.toFixed(1)}ml from ${nearbyContainer.name}`);
             return { success: true, amount: actualTransfer, source: nearbyContainer.name };
         } else {
-            return { success: false, message: 'Glass rod is full or no space available.' };
+            const toolName = rodObj.name.toLowerCase().includes('dropper') ? 'dropper' : 'glass rod';
+            return { success: false, message: `${toolName.charAt(0).toUpperCase() + toolName.slice(1)} is full or no space available.` };
         }
     }
 
@@ -4404,14 +4406,16 @@ export class ExperimentEngine {
         }
         
         if (rodObj.properties.contents.length === 0) {
-            console.log('Glass rod has no liquid');
-            return { success: false, message: 'Glass rod has no liquid to transfer.' };
+            const toolName = rodObj.name.toLowerCase().includes('dropper') ? 'dropper' : 'glass rod';
+            console.log(`${toolName} has no liquid`);
+            return { success: false, message: `${toolName.charAt(0).toUpperCase() + toolName.slice(1)} has no liquid to transfer.` };
         }
         
         const nearbyContainer = this.findNearbyContainer(rodObj);
         if (!nearbyContainer) {
             console.log('No nearby container found');
-            return { success: false, message: 'No nearby container found. Position the glass rod closer to a container.' };
+            const toolName = rodObj.name.toLowerCase().includes('dropper') ? 'dropper' : 'glass rod';
+            return { success: false, message: `No nearby container found. Position the ${toolName} closer to a container.` };
         }
         
         const rodContent = rodObj.properties.contents[0];

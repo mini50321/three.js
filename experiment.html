@@ -632,12 +632,12 @@
                 </div>
 
                 <div id="glass-rod-controls" style="margin-bottom: 15px; display: none;">
-                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #fff;">Glass Rod Controls</label>
+                    <label id="transfer-tool-label" style="display: block; margin-bottom: 8px; font-weight: 500; color: #fff;">Transfer Tool Controls</label>
                     <div style="display: flex; gap: 10px;">
                         <button id="fill-btn" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500;">Fill</button>
                         <button id="draw-btn" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500;">Draw</button>
                     </div>
-                    <p style="color: #aaa; font-size: 11px; margin-top: 5px; margin-bottom: 0;">Position the glass rod near a container, then click Fill or Draw</p>
+                    <p id="transfer-tool-hint" style="color: #aaa; font-size: 11px; margin-top: 5px; margin-bottom: 0;">Position the tool near a container, then click Fill or Draw</p>
                 </div>
 
                 <div style="margin-top: 15px; padding: 10px; background: #2a2a2a; border-radius: 6px;">
@@ -832,15 +832,27 @@
                 updateControlsForObject(obj);
                 
                 const glassRodControls = document.getElementById('glass-rod-controls');
+                const transferToolLabel = document.getElementById('transfer-tool-label');
+                const transferToolHint = document.getElementById('transfer-tool-hint');
                 
                 if (obj) {
                     const objName = obj.name.toLowerCase();
                     const isGlassRod = objName.includes('rod') || objName.includes('glass rod') || objName === 'glass rod';
-                    console.log('Object selected:', obj.name, 'isGlassRod:', isGlassRod);
+                    const isDropper = objName.includes('dropper');
+                    const isTransferTool = isGlassRod || isDropper;
+                    console.log('Object selected:', obj.name, 'isTransferTool:', isTransferTool);
                     
-                    if (isGlassRod && glassRodControls) {
+                    if (isTransferTool && glassRodControls) {
                         glassRodControls.style.display = 'block';
-                        console.log('Glass rod controls shown');
+                        if (transferToolLabel) {
+                            transferToolLabel.textContent = isDropper ? 'Dropper Controls' : 'Glass Rod Controls';
+                        }
+                        if (transferToolHint) {
+                            transferToolHint.textContent = isDropper 
+                                ? 'Position the dropper near a container, then click Fill or Draw'
+                                : 'Position the glass rod near a container, then click Fill or Draw';
+                        }
+                        console.log('Transfer tool controls shown');
                     } else if (glassRodControls) {
                         glassRodControls.style.display = 'none';
                     }
