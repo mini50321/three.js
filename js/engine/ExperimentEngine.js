@@ -516,7 +516,7 @@ export class ExperimentEngine {
         const height = this.container.clientHeight;
         
         this.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-        this.camera.position.set(5, 5, 5);
+        this.camera.position.set(5, 1.6, 5);
         this.camera.lookAt(0, 0, 0);
     }
 
@@ -560,7 +560,27 @@ export class ExperimentEngine {
         this.controls.screenSpacePanning = false;
         this.controls.enabled = true;
         
+        this.controls.minPolarAngle = 0.5;
+        this.controls.maxPolarAngle = 1.2;
+        this.controls.minAzimuthAngle = -Infinity;
+        this.controls.maxAzimuthAngle = Infinity;
+        
         this.controls.target.set(0, 0, 0);
+        
+        const eyeLevel = 1.6;
+        const constrainCameraHeight = () => {
+            const minHeight = eyeLevel - 0.3;
+            const maxHeight = eyeLevel + 0.4;
+            
+            if (this.camera.position.y < minHeight) {
+                this.camera.position.y = minHeight;
+            } else if (this.camera.position.y > maxHeight) {
+                this.camera.position.y = maxHeight;
+            }
+        };
+        
+        this.controls.addEventListener('change', constrainCameraHeight);
+        
         this.controls.update();
         
         this.targetZoomDistance = null;
