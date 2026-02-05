@@ -1864,6 +1864,57 @@ export class ExperimentEngine {
                     obj.properties.temperature -= 0.05;
                 }
                 
+                if (obj.properties.isContainer && obj.properties.contents && obj.properties.contents.length > 0) {
+                    const temp = obj.properties.temperature || 20;
+                    
+                    if (temp > 80) {
+                        const indicatorSolutionIndex = obj.properties.contents.findIndex(c => 
+                            (c.type || '').toLowerCase() === 'indicator_solution'
+                        );
+                        
+                        if (indicatorSolutionIndex >= 0) {
+                            const isAlreadyReacted = obj.properties.reactedReactions && 
+                                obj.properties.reactedReactions.some(r => r.type === 'heated_indicator');
+                            
+                            if (!isAlreadyReacted) {
+                                const indicatorContent = obj.properties.contents[indicatorSolutionIndex];
+                                const volume = indicatorContent.volume;
+                                
+                                obj.properties.contents.splice(indicatorSolutionIndex, 1);
+                                
+                                const existingHeated = obj.properties.contents.find(c => 
+                                    (c.type || '').toLowerCase() === 'heated_indicator'
+                                );
+                                if (existingHeated) {
+                                    existingHeated.volume += volume;
+                                } else {
+                                    obj.properties.contents.push({
+                                        type: 'heated_indicator',
+                                        volume: volume
+                                    });
+                                }
+                                
+                                if (!obj.properties.reactedReactions) {
+                                    obj.properties.reactedReactions = [];
+                                }
+                                obj.properties.reactedReactions.push({
+                                    type: 'heated_indicator',
+                                    timestamp: Date.now()
+                                });
+                                
+                                if (this.updateLiquidMesh) {
+                                    this.updateLiquidMesh(obj);
+                                }
+                            }
+                        }
+                    }
+                    
+                    const reaction = this.checkChemicalReaction(obj);
+                    if (reaction) {
+                        this.processChemicalReaction(obj, reaction);
+                    }
+                }
+                
                 this.updateEffects(obj);
                 this.updateMeasurements(obj);
             }
@@ -2935,20 +2986,28 @@ export class ExperimentEngine {
     }
 
     checkChemicalReaction(obj) {
-        if (!obj.properties.contents || obj.properties.contents.length < 2) {
+        if (!obj.properties.contents || obj.properties.contents.length === 0) {
             return null;
         }
         
         const reactions = this.getReactionRules();
         const contentTypes = obj.properties.contents.map(c => (c.type || '').toLowerCase());
+        const temp = obj.properties.temperature || 20;
         
         for (const reaction of reactions) {
             const reactants = reaction.reactants.map(r => r.toLowerCase());
             const hasAllReactants = reactants.every(reactant => 
-                contentTypes.some(type => type.includes(reactant))
+                contentTypes.some(type => type === reactant || type.includes(reactant))
             );
             
             if (hasAllReactants) {
+                if (reaction.minTemperature !== undefined && temp < reaction.minTemperature) {
+                    continue;
+                }
+                if (reaction.maxTemperature !== undefined && temp > reaction.maxTemperature) {
+                    continue;
+                }
+                
                 const isAlreadyReacted = obj.properties.reactedReactions && 
                     obj.properties.reactedReactions.some(r => r.type === reaction.result.type);
                 
@@ -3090,7 +3149,10 @@ export class ExperimentEngine {
             'phenolphthalein': 0xffffff,
             'litmus': 0x9370db,
             'universal_indicator': 0x00ff00,
-            'indicator_solution': 0xffeb3b
+            'indicator': 0xffeb3b,
+            'indicator_solution': 0xffeb3b,
+            'heated_indicator': 0xff9800,
+            'acidic_solution': 0xe91e63
         };
         
         const initialState = this.config.initialState && Array.isArray(this.config.initialState) ? 
@@ -3117,25 +3179,62 @@ export class ExperimentEngine {
                 }
             }
         } else {
-            let r = 0, g = 0, b = 0;
-            let totalVolume = 0;
-            
-            contents.forEach(content => {
-                const vol = content.volume || 0;
-                totalVolume += vol;
-                const type = (content.type || 'water').toLowerCase();
-                const color = new THREE.Color(colorMap[type] || colorMap['water']);
-                r += color.r * vol;
-                g += color.g * vol;
-                b += color.b * vol;
+            const contentTypes = contents.map(c => (c.type || '').toLowerCase());
+            const reactionForMixed = reactions.find(r => {
+                if (!r.result || !r.reactants) return false;
+                const reactants = r.reactants.map(react => react.toLowerCase());
+                const hasAllReactants = reactants.every(reactant => 
+                    contentTypes.some(type => type === reactant || type.includes(reactant))
+                );
+                return hasAllReactants;
             });
             
-            if (totalVolume > 0 && (!hasInitialContents || !initialState || !initialState.initialColor)) {
-                baseColor = new THREE.Color(r / totalVolume, g / totalVolume, b / totalVolume);
+            if (reactionForMixed && reactionForMixed.result && reactionForMixed.result.color !== undefined) {
+                baseColor = new THREE.Color(reactionForMixed.result.color);
+            } else {
+                let r = 0, g = 0, b = 0;
+                let totalVolume = 0;
+                
+                contents.forEach(content => {
+                    const vol = content.volume || 0;
+                    totalVolume += vol;
+                    const type = (content.type || 'water').toLowerCase();
+                    const reactionForContent = reactions.find(r => 
+                        r.result && (r.result.type || '').toLowerCase() === type
+                    );
+                    let color;
+                    if (reactionForContent && reactionForContent.result && reactionForContent.result.color !== undefined) {
+                        color = new THREE.Color(reactionForContent.result.color);
+                    } else {
+                        color = new THREE.Color(colorMap[type] || colorMap['water']);
+                    }
+                    r += color.r * vol;
+                    g += color.g * vol;
+                    b += color.b * vol;
+                });
+                
+                if (totalVolume > 0 && (!hasInitialContents || !initialState || !initialState.initialColor)) {
+                    baseColor = new THREE.Color(r / totalVolume, g / totalVolume, b / totalVolume);
+                }
             }
         }
         
         const temp = obj.properties.temperature || 20;
+        
+        if (contents.length === 1) {
+            const contentType = (contents[0].type || '').toLowerCase();
+            if (contentType === 'indicator_solution' && temp > 80) {
+                const heatedReaction = reactions.find(r => 
+                    r.reactants && r.reactants.length === 1 && 
+                    r.reactants[0].toLowerCase() === 'indicator_solution' &&
+                    r.result && (r.result.type || '').toLowerCase() === 'heated_indicator'
+                );
+                if (heatedReaction && heatedReaction.result && heatedReaction.result.color !== undefined) {
+                    return new THREE.Color(heatedReaction.result.color);
+                }
+                return new THREE.Color(0xff9800);
+            }
+        }
         
         if (temp > 80 && initialState && initialState.boilingColor) {
             const colorStr = initialState.boilingColor.startsWith('#') ? initialState.boilingColor : '#' + initialState.boilingColor;
@@ -4359,10 +4458,66 @@ export class ExperimentEngine {
             this.measurements.volume[rodObj.name] = rodObj.properties.volume;
             this.measurements.volume[nearbyContainer.name] = this.calculateVolume(nearbyContainer);
             
-            if (this.checkChemicalReaction) {
-                const reaction = this.checkChemicalReaction(nearbyContainer);
-                if (reaction) {
-                    this.processChemicalReaction(nearbyContainer, reaction);
+            const temp = nearbyContainer.properties.temperature || 20;
+            if (nearbyContainer.properties.contents && nearbyContainer.properties.contents.length > 0) {
+                const contentTypes = nearbyContainer.properties.contents.map(c => (c.type || '').toLowerCase());
+                console.log('[Glass Rod] Beaker contents before reaction:', contentTypes, 'Temp:', temp);
+                
+                const reactions = this.getReactionRules();
+                
+                if (temp > 80) {
+                    const indicatorSolutionIndex = nearbyContainer.properties.contents.findIndex(c => 
+                        (c.type || '').toLowerCase() === 'indicator_solution'
+                    );
+                    
+                    if (indicatorSolutionIndex >= 0) {
+                        const isAlreadyReacted = nearbyContainer.properties.reactedReactions && 
+                            nearbyContainer.properties.reactedReactions.some(r => r.type === 'heated_indicator');
+                        
+                        if (!isAlreadyReacted) {
+                            console.log('[Glass Rod] Converting indicator_solution to heated_indicator (temp > 80°C)');
+                            const indicatorContent = nearbyContainer.properties.contents[indicatorSolutionIndex];
+                            const volume = indicatorContent.volume;
+                            
+                            nearbyContainer.properties.contents.splice(indicatorSolutionIndex, 1);
+                            
+                            const existingHeated = nearbyContainer.properties.contents.find(c => 
+                                (c.type || '').toLowerCase() === 'heated_indicator'
+                            );
+                            if (existingHeated) {
+                                existingHeated.volume += volume;
+                            } else {
+                                nearbyContainer.properties.contents.push({
+                                    type: 'heated_indicator',
+                                    volume: volume
+                                });
+                            }
+                            
+                            if (!nearbyContainer.properties.reactedReactions) {
+                                nearbyContainer.properties.reactedReactions = [];
+                            }
+                            nearbyContainer.properties.reactedReactions.push({
+                                type: 'heated_indicator',
+                                timestamp: Date.now()
+                            });
+                            
+                            const newContentTypes = nearbyContainer.properties.contents.map(c => (c.type || '').toLowerCase());
+                            console.log('[Glass Rod] Converted to heated_indicator. New contents:', newContentTypes);
+                        }
+                    }
+                }
+                
+                if (this.checkChemicalReaction) {
+                    const reaction = this.checkChemicalReaction(nearbyContainer);
+                    if (reaction) {
+                        console.log('[Glass Rod] Found reaction:', reaction.result?.type, 'Color:', reaction.result?.color);
+                        this.processChemicalReaction(nearbyContainer, reaction);
+                        const afterContentTypes = nearbyContainer.properties.contents.map(c => (c.type || '').toLowerCase());
+                        console.log('[Glass Rod] Beaker contents after reaction:', afterContentTypes);
+                    } else {
+                        const currentContentTypes = nearbyContainer.properties.contents.map(c => (c.type || '').toLowerCase());
+                        console.log('[Glass Rod] No reaction found for contents:', currentContentTypes);
+                    }
                 }
             }
             
