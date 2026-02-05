@@ -33,6 +33,7 @@ function addStep() {
                     <option value="heat">Heat</option>
                     <option value="stir">Stir</option>
                     <option value="drag">Drag</option>
+                    <option value="shake">Shake</option>
                 </select>
             </div>
             <div style="display: flex; align-items: flex-end;">
@@ -345,10 +346,36 @@ function loadStepRules(stepIdx, stepData) {
     }
 }
 
+function updateObjectNumbers() {
+    const cards = document.querySelectorAll('.initial-state-card');
+    cards.forEach((card, index) => {
+        const header = card.querySelector('.object-number-header');
+        if (header) {
+            const h4 = header.querySelector('h4');
+            if (h4) {
+                h4.textContent = `Object ${index + 1}`;
+            } else {
+                header.innerHTML = `<h4 style="margin: 0; color: #1e293b; font-size: 18px; font-weight: 700;">Object ${index + 1}</h4>`;
+            }
+        } else {
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'object-number-header';
+            headerDiv.style.cssText = 'margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #e2e8f0;';
+            headerDiv.innerHTML = `<h4 style="margin: 0; color: #1e293b; font-size: 18px; font-weight: 700;">Object ${index + 1}</h4>`;
+            card.insertBefore(headerDiv, card.firstChild);
+        }
+    });
+}
+
 function addInitialState() {
     const div = document.createElement('div');
     div.className = 'initial-state-card';
+    const container = document.getElementById('initial-states');
+    const objectNumber = container.children.length + 1;
     div.innerHTML = `
+        <div class="object-number-header" style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #e2e8f0;">
+            <h4 style="margin: 0; color: #1e293b; font-size: 18px; font-weight: 700;">Object ${objectNumber}</h4>
+        </div>
         <div class="initial-state-grid">
             <div class="form-group form-group-inline">
                 <label>Object Name</label>
@@ -367,7 +394,7 @@ function addInitialState() {
                 <input type="text" name="initialState[${initialStateIndex}][contents]" placeholder="e.g., water, acid">
             </div>
             <div>
-                <button type="button" onclick="this.closest('.initial-state-card').remove()" class="btn btn-danger">Remove</button>
+                <button type="button" onclick="this.closest('.initial-state-card').remove(); updateObjectNumbers();" class="btn btn-danger">Remove</button>
             </div>
         </div>
         <div class="color-config">
@@ -393,6 +420,7 @@ function addInitialState() {
     `;
     document.getElementById('initial-states').appendChild(div);
     initialStateIndex++;
+    updateObjectNumbers();
 }
 
 function loadInitialStates(initialStates) {
@@ -401,10 +429,13 @@ function loadInitialStates(initialStates) {
     initialStateIndex = 0;
     
     if (initialStates && Array.isArray(initialStates)) {
-        initialStates.forEach(state => {
+        initialStates.forEach((state, index) => {
             const div = document.createElement('div');
             div.className = 'initial-state-card';
             div.innerHTML = `
+                <div class="object-number-header" style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #e2e8f0;">
+                    <h4 style="margin: 0; color: #1e293b; font-size: 18px; font-weight: 700;">Object ${index + 1}</h4>
+                </div>
                 <div class="initial-state-grid">
                     <div class="form-group form-group-inline">
                         <label>Object Name</label>
@@ -450,6 +481,7 @@ function loadInitialStates(initialStates) {
             container.appendChild(div);
             initialStateIndex++;
         });
+        updateObjectNumbers();
     }
 }
 

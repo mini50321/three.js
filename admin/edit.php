@@ -181,6 +181,7 @@ if (!$exp) {
                                 <option value="heat" <?= $s['action']=='heat'?'selected':'' ?>>Heat</option>
                                 <option value="stir" <?= $s['action']=='stir'?'selected':'' ?>>Stir</option>
                                 <option value="drag" <?= $s['action']=='drag'?'selected':'' ?>>Drag</option>
+                                <option value="shake" <?= $s['action']=='shake'?'selected':'' ?>>Shake</option>
                             </select>
                         </div>
                         <div style="display: flex; align-items: flex-end;">
