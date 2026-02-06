@@ -671,7 +671,7 @@
                         <option value="iron">Iron Powder</option>
                     </select>
                     <div style="display: flex; gap: 10px; align-items: stretch;">
-                        <input type="number" id="powder-amount" min="0" max="1000" value="10" step="1" placeholder="Mass (g)" style="flex: 1; padding: 10px; background: #444; color: #fff; border: 1px solid #555; border-radius: 4px; box-sizing: border-box; font-size: 14px; height: 38px; line-height: 1;">
+                        <input type="number" id="powder-amount" min="0" max="1000" value="10" step="1" placeholder="Volume (ml)" style="flex: 1; padding: 10px; background: #444; color: #fff; border: 1px solid #555; border-radius: 4px; box-sizing: border-box; font-size: 14px; height: 38px; line-height: 1;">
                         <button id="add-powder-btn" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; height: 38px; line-height: 1;">Add</button>
                     </div>
                 </div>
@@ -1038,7 +1038,8 @@
                         engine.selectedObject.properties.contents.push({ type: type, volume: amount });
                     }
                     
-                    engine.selectedObject.properties.volume = engine.calculateVolume(engine.selectedObject);
+                    const newVolume = engine.calculateVolume(engine.selectedObject);
+                    engine.selectedObject.properties.volume = newVolume;
                     
                     if (engine.updateLiquidMesh) {
                         engine.updateLiquidMesh(engine.selectedObject);
@@ -1047,7 +1048,16 @@
                         engine.updateMeasurements(engine.selectedObject);
                     }
                     
-                    console.log(`Added ${amount}ml of ${type} to ${engine.selectedObject.name}`);
+                    const volumeInput = document.getElementById('volume-input');
+                    if (volumeInput) {
+                        volumeInput.value = Math.round(newVolume * 10) / 10;
+                    }
+                    
+                    if (typeof window.updateMeasurements === 'function') {
+                        window.updateMeasurements();
+                    }
+                    
+                    console.log(`Added ${amount}ml of ${type} to ${engine.selectedObject.name}. New volume: ${newVolume.toFixed(2)}ml`);
                 });
             }
 
@@ -1068,12 +1078,15 @@
                     }
                     
                     const type = powderType.value;
-                    const mass = parseFloat(powderAmount.value) || 0;
+                    const volume = parseFloat(powderAmount.value) || 0;
                     
-                    if (mass <= 0) {
-                        alert('Please enter a valid mass');
+                    if (volume <= 0) {
+                        alert('Please enter a valid volume');
                         return;
                     }
+                    
+                    const density = 1.5;
+                    const mass = volume * density;
                     
                     if (!engine.selectedObject.properties.contents) {
                         engine.selectedObject.properties.contents = [];
@@ -1086,6 +1099,9 @@
                         engine.selectedObject.properties.contents.push({ type: type, mass: mass, volume: 0 });
                     }
                     
+                    const newVolume = engine.calculateVolume(engine.selectedObject);
+                    engine.selectedObject.properties.volume = newVolume;
+                    
                     if (engine.updatePowderMesh) {
                         engine.updatePowderMesh(engine.selectedObject);
                     }
@@ -1093,7 +1109,16 @@
                         engine.updateMeasurements(engine.selectedObject);
                     }
                     
-                    console.log(`Added ${mass}g of ${type} powder to ${engine.selectedObject.name}`);
+                    const volumeInput = document.getElementById('volume-input');
+                    if (volumeInput) {
+                        volumeInput.value = Math.round(newVolume * 10) / 10;
+                    }
+                    
+                    if (typeof window.updateMeasurements === 'function') {
+                        window.updateMeasurements();
+                    }
+                    
+                    console.log(`Added ${volume}ml (${mass.toFixed(2)}g) of ${type} powder to ${engine.selectedObject.name}. New volume: ${newVolume.toFixed(2)}ml`);
                 });
             }
 

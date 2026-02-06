@@ -182,6 +182,7 @@ if (!$exp) {
                                 <option value="stir" <?= $s['action']=='stir'?'selected':'' ?>>Stir</option>
                                 <option value="drag" <?= $s['action']=='drag'?'selected':'' ?>>Drag</option>
                                 <option value="shake" <?= $s['action']=='shake'?'selected':'' ?>>Shake</option>
+                                <option value="observe" <?= $s['action']=='observe'?'selected':'' ?>>Observe</option>
                             </select>
                         </div>
                         <div style="display: flex; align-items: flex-end;">

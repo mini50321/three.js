@@ -34,6 +34,7 @@ function addStep() {
                     <option value="stir">Stir</option>
                     <option value="drag">Drag</option>
                     <option value="shake">Shake</option>
+                    <option value="observe">Observe</option>
                 </select>
             </div>
             <div style="display: flex; align-items: flex-end;">

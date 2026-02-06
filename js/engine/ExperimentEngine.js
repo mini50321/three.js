@@ -38,7 +38,7 @@ export class ExperimentEngine {
         this.powderMeshes = new Map();
         this.gasMeshes = new Map();
         this.chemicalStates = {
-            solid: ['powder', 'salt', 'sugar', 'copper', 'iron', 'sodium', 'calcium'],
+            solid: ['powder', 'salt', 'sugar', 'copper', 'iron', 'sodium', 'calcium', 'carbonate'],
             gas: ['gas', 'vapor', 'smoke', 'steam', 'co2', 'oxygen', 'hydrogen', 'chlorine']
         };
         this.measurements = {
@@ -3322,12 +3322,26 @@ export class ExperimentEngine {
             return new THREE.Color(0x4a90e2);
         }
         
-        const reaction = this.checkChemicalReaction(obj);
-        if (reaction) {
-            return new THREE.Color(reaction.result.color);
+        const allContents = obj.properties.contents;
+        const liquidContents = allContents.filter(c => {
+            const state = this.getChemicalState(c.type);
+            return state === 'liquid' && (c.volume || 0) > 0.001;
+        });
+        
+        if (liquidContents.length === 0) {
+            return new THREE.Color(0x4a90e2);
         }
         
-        const contents = obj.properties.contents;
+        const tempObj = { ...obj, properties: { ...obj.properties, contents: liquidContents } };
+        const reaction = this.checkChemicalReaction(tempObj);
+        if (reaction) {
+            const resultState = this.getChemicalState(reaction.result.type);
+            if (resultState === 'liquid') {
+                return new THREE.Color(reaction.result.color);
+            }
+        }
+        
+        const contents = liquidContents;
         let baseColor = new THREE.Color(0x4a90e2);
         
         const reactions = this.getReactionRules();
@@ -3621,7 +3635,7 @@ export class ExperimentEngine {
         liquidMesh.material.opacity = isRod ? 0.9 : 0.85;
         
         liquidMesh.rotation.copy(obj.mesh.rotation);
-        liquidMesh.renderOrder = 1;
+        liquidMesh.renderOrder = 2;
     }
 
     updatePowderMesh(obj) {
@@ -3664,7 +3678,11 @@ export class ExperimentEngine {
         
         const objName = obj.name.toLowerCase();
         const isCylinder = objName.includes('cylinder') || objName.includes('graduated');
-        const radius = isCylinder ? Math.min(size.x, size.z) * 0.2 : Math.min(size.x, size.z) * 0.45;
+        const containerDiameter = Math.min(size.x, size.z);
+        const containerRadius = containerDiameter / 2;
+        const areaRatio = 0.2;
+        const powderRadius = containerRadius * Math.sqrt(areaRatio);
+        const radius = powderRadius;
         
         let powderMesh = this.powderMeshes.get(obj.name);
         
@@ -3693,12 +3711,22 @@ export class ExperimentEngine {
         const powderCenterY = powderBottom + powderHeight / 2;
         powderMesh.position.set(containerCenter.x, powderCenterY, containerCenter.z);
         powderMesh.rotation.copy(obj.mesh.rotation);
-        powderMesh.renderOrder = 1;
+        powderMesh.renderOrder = 0;
         
         if (powderContents.length > 0) {
             const firstPowder = powderContents[0];
-            const powderColor = this.getLiquidColor(obj);
-            powderMesh.material.color.copy(powderColor);
+            const powderType = (firstPowder.type || '').toLowerCase();
+            const powderColorMap = {
+                'carbonate': 0xffffff,
+                'salt': 0xffffff,
+                'sugar': 0xfff8dc,
+                'copper': 0xb87333,
+                'iron': 0x808080,
+                'calcium': 0xffffff,
+                'sodium': 0xffffff
+            };
+            const powderColor = powderColorMap[powderType] || 0xcccccc;
+            powderMesh.material.color.setHex(powderColor);
         }
     }
 
