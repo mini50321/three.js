@@ -37,6 +37,8 @@ export class ExperimentEngine {
         this.liquidMeshes = new Map();
         this.powderMeshes = new Map();
         this.gasMeshes = new Map();
+        this.labels = new Map();
+        this.showLabels = true;
         this.chemicalStates = {
             solid: ['powder', 'salt', 'sugar', 'copper', 'iron', 'sodium', 'calcium', 'carbonate'],
             gas: ['gas', 'vapor', 'smoke', 'steam', 'co2', 'oxygen', 'hydrogen', 'chlorine']
@@ -1411,10 +1413,13 @@ export class ExperimentEngine {
             this.scene.add(model);
             this.objects.set(name, objectData);
             
-            if (objectData.properties.isContainer && initialVolume > 0) {
-                this.measurements.volume[name] = initialVolume;
-                if (this.createLiquidMesh) {
-                    this.createLiquidMesh(objectData);
+            if (objectData.properties.isContainer) {
+                this.createLabel(objectData);
+                if (initialVolume > 0) {
+                    this.measurements.volume[name] = initialVolume;
+                    if (this.createLiquidMesh) {
+                        this.createLiquidMesh(objectData);
+                    }
                 }
             }
             
@@ -1503,6 +1508,7 @@ export class ExperimentEngine {
 
     removeLabware(name) {
         console.log('removeLabware called for:', name);
+        this.removeLabel(name);
         const obj = this.objects.get(name);
         if (!obj) {
             console.warn(`Labware ${name} not found`);
@@ -1676,6 +1682,8 @@ export class ExperimentEngine {
         this.updateFireEffects();
        
         this.renderer.render(this.scene, this.camera);
+        
+        this.updateAllLabels();
     }
 
     updatePhysics() {
@@ -3253,10 +3261,122 @@ export class ExperimentEngine {
             if (this.updatePowderMesh) {
                 this.updatePowderMesh(obj);
             }
+            this.updateLabel(obj);
         }
         
         this.measurements.temperature[obj.name] = obj.properties.temperature;
         this.measurements.time = (Date.now() - this.measurements.time) / 1000;
+    }
+
+    createLabel(obj) {
+        if (!obj || !obj.properties.isContainer) return;
+        
+        const labelId = `label-${obj.name}`;
+        let labelElement = document.getElementById(labelId);
+        
+        if (!labelElement) {
+            labelElement = document.createElement('div');
+            labelElement.id = labelId;
+            labelElement.className = 'chemical-label';
+            labelElement.style.cssText = `
+                position: absolute;
+                pointer-events: none;
+                background: rgba(255, 255, 255, 0.95);
+                border: 2px solid #4a90e2;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 14px;
+                font-weight: 600;
+                color: #2c3e50;
+                white-space: nowrap;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+                z-index: 1000;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                transform: translate(-50%, -100%);
+                margin-top: -10px;
+            `;
+            this.container.appendChild(labelElement);
+        }
+        
+        this.labels.set(obj.name, labelElement);
+        this.updateLabel(obj);
+    }
+
+    updateLabel(obj) {
+        if (!obj || !obj.properties.isContainer) return;
+        
+        let labelElement = this.labels.get(obj.name);
+        if (!labelElement) {
+            this.createLabel(obj);
+            labelElement = this.labels.get(obj.name);
+            if (!labelElement) return;
+        }
+        
+        const contents = obj.properties.contents || [];
+        if (contents.length === 0) {
+            labelElement.style.display = 'none';
+            return;
+        }
+        
+        const chemicalNames = contents
+            .filter(c => (c.volume || 0) > 0.001 || (c.mass || 0) > 0.001)
+            .map(c => {
+                const name = c.type || 'unknown';
+                const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
+                return capitalized;
+            });
+        
+        if (chemicalNames.length === 0) {
+            labelElement.style.display = 'none';
+            return;
+        }
+        
+        labelElement.textContent = chemicalNames.join(', ');
+        labelElement.style.display = this.showLabels ? 'block' : 'none';
+        
+        this.updateLabelPosition(obj, labelElement);
+    }
+
+    updateLabelPosition(obj, labelElement) {
+        if (!obj || !obj.mesh || !labelElement) return;
+        
+        obj.mesh.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(obj.mesh);
+        if (box.isEmpty()) return;
+        
+        const topCenter = new THREE.Vector3(
+            box.getCenter(new THREE.Vector3()).x,
+            box.max.y,
+            box.getCenter(new THREE.Vector3()).z
+        );
+        
+        const vector = topCenter.project(this.camera);
+        const x = (vector.x * 0.5 + 0.5) * this.container.clientWidth;
+        const y = (-vector.y * 0.5 + 0.5) * this.container.clientHeight;
+        
+        labelElement.style.left = x + 'px';
+        labelElement.style.top = y + 'px';
+    }
+
+    removeLabel(objName) {
+        const labelElement = this.labels.get(objName);
+        if (labelElement && labelElement.parentNode) {
+            labelElement.parentNode.removeChild(labelElement);
+        }
+        this.labels.delete(objName);
+    }
+
+    updateAllLabels() {
+        if (!this.showLabels) return;
+        
+        for (const [name, obj] of this.objects) {
+            if (obj.properties.isContainer) {
+                const labelElement = this.labels.get(name);
+                if (labelElement) {
+                    this.updateLabelPosition(obj, labelElement);
+                }
+            }
+        }
     }
 
     calculateVolume(obj) {
