@@ -7,6 +7,7 @@ import { PourController } from './controllers/PourController.js';
 import { HeatController } from './controllers/HeatController.js';
 import { StirController } from './controllers/StirController.js';
 import { ScaleController } from './controllers/ScaleController.js';
+import { InsertionController } from './controllers/InsertionController.js';
 import { PerformanceManager } from './PerformanceManager.js';
 import { PhysicsManager } from './PhysicsManager.js';
 
@@ -1049,6 +1050,7 @@ export class ExperimentEngine {
         this.interactions.set('heat', new HeatController(this));
         this.interactions.set('stir', new StirController(this));
         this.scaleController = new ScaleController(this);
+        this.insertionController = new InsertionController(this);
         
         console.log('Controllers set up. Drag controller exists:', !!this.interactions.get('drag'));
         

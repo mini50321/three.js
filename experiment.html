@@ -977,6 +977,12 @@
                     <p id="scale-object-name" style="color: #aaa; font-size: 11px; margin-top: 5px; margin-bottom: 0;"></p>
                 </div>
 
+                <div id="insertion-controls" style="margin-bottom: 15px; display: none;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #fff;">Insertion</label>
+                    <button id="insert-btn" style="width: 100%; padding: 10px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500;">Insert</button>
+                    <p id="insertion-hint" style="color: #aaa; font-size: 11px; margin-top: 5px; margin-bottom: 0;"></p>
+                </div>
+
                 <div id="chemical-controls" style="margin-bottom: 15px; display: none;">
                     <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #fff;">Add Chemical</label>
                     <select id="chemical-type" style="width: 100%; padding: 8px; background: #444; color: #fff; border: 1px solid #555; border-radius: 4px; margin-bottom: 8px;">
@@ -1244,11 +1250,37 @@
                         if (powderControls) powderControls.style.display = 'none';
                         if (reactionControls) reactionControls.style.display = 'none';
                     }
+                    
+                    const insertionControls = document.getElementById('insertion-controls');
+                    const insertionHint = document.getElementById('insertion-hint');
+                    const canBeInserted = objName.includes('rod') || objName.includes('tube') || objName.includes('test') || objName.includes('dropper');
+                    
+                    if (engine && engine.insertionController && canBeInserted) {
+                        console.log('[UI] Object selected, checking insertion for:', obj.name, 'canBeInserted:', canBeInserted);
+                        setTimeout(() => {
+                            const container = engine.insertionController.checkInsertionReady(obj);
+                            console.log('[UI] Insertion check result for', obj.name, ':', container ? container.name : 'none');
+                            if (container && insertionControls) {
+                                console.log('[UI] Showing insertion button for', obj.name, '->', container.name);
+                                insertionControls.style.display = 'block';
+                                if (insertionHint) {
+                                    insertionHint.textContent = `Ready to insert into ${container.name}`;
+                                }
+                            } else if (insertionControls) {
+                                console.log('[UI] Hiding insertion button - no container found');
+                                insertionControls.style.display = 'none';
+                            }
+                        }, 200);
+                    } else if (insertionControls) {
+                        insertionControls.style.display = 'none';
+                    }
                 } else {
                     if (glassRodControls) glassRodControls.style.display = 'none';
                     if (chemicalControls) chemicalControls.style.display = 'none';
                     if (powderControls) powderControls.style.display = 'none';
                     if (reactionControls) reactionControls.style.display = 'none';
+                    const insertionControls = document.getElementById('insertion-controls');
+                    if (insertionControls) insertionControls.style.display = 'none';
                 }
             });
 
@@ -1654,9 +1686,67 @@
                 });
             }
 
+            const insertBtn = document.getElementById('insert-btn');
+            if (insertBtn) {
+                insertBtn.addEventListener('click', () => {
+                    if (engine && engine.selectedObject && engine.insertionController) {
+                        const container = engine.insertionController.checkInsertionReady(engine.selectedObject);
+                        if (container) {
+                            engine.insertionController.showInsertionModal(engine.selectedObject, container);
+                        }
+                    }
+                });
+            }
+
+            document.addEventListener('objectPositionChanged', (e) => {
+                const obj = e.detail.object;
+                if (engine && engine.selectedObject === obj && engine.insertionController) {
+                    const insertionControls = document.getElementById('insertion-controls');
+                    const insertionHint = document.getElementById('insertion-hint');
+                    const container = engine.insertionController.checkInsertionReady(obj);
+                    if (container && insertionControls) {
+                        insertionControls.style.display = 'block';
+                        if (insertionHint) {
+                            insertionHint.textContent = `Ready to insert into ${container.name}`;
+                        }
+                    } else if (insertionControls) {
+                        insertionControls.style.display = 'none';
+                    }
+                }
+            });
+
             setInterval(() => {
                 if (engine && engine.scaleController) {
                     engine.scaleController.checkAndUpdateScaleButton();
+                }
+                
+                if (engine && engine.selectedObject && engine.insertionController) {
+                    const objName = engine.selectedObject.name.toLowerCase();
+                    const canBeInserted = objName.includes('rod') || objName.includes('tube') || objName.includes('test') || objName.includes('dropper');
+                    
+                    if (canBeInserted) {
+                        const insertionControls = document.getElementById('insertion-controls');
+                        const insertionHint = document.getElementById('insertion-hint');
+                        const container = engine.insertionController.checkInsertionReady(engine.selectedObject);
+                        if (container && insertionControls) {
+                            insertionControls.style.display = 'block';
+                            if (insertionHint) {
+                                insertionHint.textContent = `Ready to insert into ${container.name}`;
+                            }
+                        } else if (insertionControls) {
+                            insertionControls.style.display = 'none';
+                        }
+                    } else {
+                        const insertionControls = document.getElementById('insertion-controls');
+                        if (insertionControls) {
+                            insertionControls.style.display = 'none';
+                        }
+                    }
+                } else {
+                    const insertionControls = document.getElementById('insertion-controls');
+                    if (insertionControls) {
+                        insertionControls.style.display = 'none';
+                    }
                 }
             }, 500);
 

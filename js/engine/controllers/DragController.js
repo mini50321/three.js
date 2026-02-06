@@ -174,6 +174,11 @@ export class DragController {
             this.engine.scaleController.onObjectPlaced(this.activeObject);
         }
         
+        if (this.activeObject && this.engine.insertionController) {
+            const event = new CustomEvent('objectPositionChanged', { detail: { object: this.activeObject } });
+            document.dispatchEvent(event);
+        }
+        
         this.activeObject = null;
     }
 }
