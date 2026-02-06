@@ -3595,6 +3595,10 @@ export class ExperimentEngine {
                 Math.pow(event.clientY - this.mouseDownPosition.y, 2)
             );
             
+            if (this.pendingTiltObject && moveDistance <= 5) {
+                console.log('[ExperimentEngine] Mouse moved but distance too small:', moveDistance.toFixed(2), 'need > 5');
+            }
+            
             if (moveDistance > 5) {
                 if (this.pendingDragObject && !this.activeController) {
                     const obj = this.pendingDragObject;
@@ -3624,8 +3628,22 @@ export class ExperimentEngine {
                         this.pendingPourObject = null;
                         this.pendingStirObject = null;
                         this.mouseDownPosition = null;
-                        console.log('Tilt started on move for:', obj.name);
+                        console.log('[ExperimentEngine] Tilt started on move for:', obj.name);
+                    } else {
+                        console.log('[ExperimentEngine] Tilt blocked:', {
+                            hasPendingTilt: !!this.pendingTiltObject,
+                            hasActiveController: !!this.activeController,
+                            activeControllerType: this.activeController?.constructor?.name,
+                            hasTiltController: !!tiltController,
+                            isTiltable: obj?.interactions?.tiltable,
+                            objName: obj?.name
+                        });
                     }
+                } else if (this.pendingTiltObject) {
+                    console.log('[ExperimentEngine] Tilt pending but activeController exists:', {
+                        pendingTiltObject: this.pendingTiltObject?.name,
+                        activeController: this.activeController?.constructor?.name
+                    });
                 } else if (this.pendingPourObject && !this.activeController) {
                     const obj = this.pendingPourObject;
                     const pourController = this.interactions.get('pour');
@@ -3894,12 +3912,14 @@ export class ExperimentEngine {
             console.log('Object clicked, waiting for mouse move to start drag:', obj.name);
         }
         
-        if (obj.interactions.tiltable && !previousSelected) {
-            this.pendingTiltObject = obj;
-            if (!this.mouseDownPosition) {
-                this.mouseDownPosition = { x: event.clientX, y: event.clientY };
+        if (obj.interactions.tiltable) {
+            if (!previousSelected || previousSelected === obj || (obj.properties.isContainer && previousSelected?.properties?.isContainer)) {
+                this.pendingTiltObject = obj;
+                if (!this.mouseDownPosition) {
+                    this.mouseDownPosition = { x: event.clientX, y: event.clientY };
+                }
+                console.log('[ExperimentEngine] Object clicked, waiting for mouse move to start tilt:', obj.name);
             }
-            console.log('Object clicked, waiting for mouse move to start tilt:', obj.name);
         }
         
         const canPour = (obj.interactions.canPour || obj.properties.canPour) && obj.properties.isContainer;

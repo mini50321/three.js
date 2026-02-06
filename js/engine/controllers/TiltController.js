@@ -25,39 +25,32 @@ export class TiltController {
     }
 
     start(obj, event) {
-        console.log('[TiltController] start called', {
-            objectName: obj.name,
-            isTiltable: obj.interactions.tiltable,
-            isContainer: obj.properties.isContainer,
-            hasContents: !!(obj.properties.contents && obj.properties.contents.length > 0),
-            volume: obj.properties.volume
-        });
-        
         if (!obj.interactions.tiltable) {
-            console.log('[TiltController] Object is not tiltable, returning');
+            console.log('[TiltController] Object not tiltable:', obj.name);
             return;
         }
         
-        this.hidePourModal();
+        if (this.pourModal) {
+            this.hidePourModal();
+        }
         this.activeObject = obj;
         this.hasShownModal = false;
         this.modalJustClosed = false;
         this.pendingPourTarget = null;
+        this.dismissedObjects.delete(obj);
         const rect = this.engine.renderer.domElement.getBoundingClientRect();
         this.startMouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         this.startMouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         this.startRotation.copy(obj.mesh.rotation);
-        console.log('[TiltController] Tilt started successfully for:', obj.name);
+        console.log('[TiltController] Started tilt for', obj.name, {
+            wasDismissed: this.dismissedObjects.has(obj),
+            dismissedObjectsSize: this.dismissedObjects.size,
+            dismissedObjects: Array.from(this.dismissedObjects).map(o => o.name)
+        });
     }
 
     update(event) {
-        console.log('[TiltController] update called', {
-            hasActiveObject: !!this.activeObject,
-            activeObjectName: this.activeObject?.name
-        });
-        
         if (!this.activeObject) {
-            console.log('[TiltController] No active object, returning');
             return;
         }
         
@@ -89,46 +82,46 @@ export class TiltController {
         }
         
         if (this.activeObject.properties.isContainer) {
-            const hasContents = (this.activeObject.properties.contents && 
-                                this.activeObject.properties.contents.length > 0) ||
-                               (this.activeObject.properties.volume > 0);
+            const currentVolume = this.engine.calculateVolume(this.activeObject);
+            const hasContents = currentVolume > 0.001;
             
             const tiltAngle = Math.abs(tiltX) + Math.abs(tiltZ);
-            console.log('TiltController update:', {
-                container: this.activeObject.name,
-                hasContents: hasContents,
-                tiltAngle: tiltAngle.toFixed(3),
-                tiltX: tiltX.toFixed(3),
-                tiltZ: tiltZ.toFixed(3),
-                hasShownModal: this.hasShownModal,
-                volume: this.activeObject.properties.volume,
-                contentsLength: this.activeObject.properties.contents?.length || 0
-            });
             
             if (hasContents) {
                 const tiltThreshold = 0.001;
                 if (tiltAngle > tiltThreshold) {
-                    if (!this.hasShownModal && !this.modalJustClosed && !this.dismissedObjects.has(this.activeObject)) {
-                        console.log('Tilt angle sufficient, finding pour target...', { tiltAngle, threshold: tiltThreshold, tiltX, tiltZ });
+                    const isDismissed = this.dismissedObjects.has(this.activeObject);
+                    if (!this.hasShownModal && !this.modalJustClosed && !isDismissed) {
                         this.findPourTarget();
                         if (this.pendingPourTarget) {
-                            console.log('Target found! Showing pour modal for:', this.activeObject.name, 'to', this.pendingPourTarget.name);
+                            console.log('[TiltController] Showing pour modal for', this.activeObject.name, 'to', this.pendingPourTarget.name);
                             this.showPourModal();
                             this.hasShownModal = true;
                         } else {
-                            console.log('No pour target found nearby - distance check may be failing');
+                            console.log('[TiltController] No pour target found for', this.activeObject.name, {
+                                tiltAngle: tiltAngle.toFixed(3),
+                                volume: currentVolume.toFixed(2),
+                                objectsCount: this.engine.objects.size
+                            });
                         }
                     } else {
-                        console.log('Tilt sufficient but blocked:', { hasShownModal: this.hasShownModal, modalJustClosed: this.modalJustClosed, isDismissed: this.dismissedObjects.has(this.activeObject), tiltAngle });
+                        console.log('[TiltController] Modal blocked for', this.activeObject.name, {
+                            hasShownModal: this.hasShownModal,
+                            modalJustClosed: this.modalJustClosed,
+                            isDismissed: isDismissed,
+                            tiltAngle: tiltAngle.toFixed(3),
+                            dismissedObjects: Array.from(this.dismissedObjects).map(o => o.name)
+                        });
                     }
                 }
+            } else {
+                console.log('[TiltController] No contents in', this.activeObject.name, 'volume:', currentVolume.toFixed(2));
             }
         }
     }
     
     findPourTarget() {
         if (!this.activeObject) {
-            console.log('findPourTarget: No active object');
             return;
         }
         
@@ -136,21 +129,15 @@ export class TiltController {
         const tiltX = this.activeObject.mesh.rotation.x;
         const tiltZ = this.activeObject.mesh.rotation.z;
         
-        console.log('findPourTarget: Searching for targets near', this.activeObject.name, 'at position', activePos);
-        console.log('Total objects in scene:', this.engine.objects.size);
-        
         let closest = null;
         let minDistance = Infinity;
         let bestScore = -1;
-        const candidates = [];
         
         for (const [name, obj] of this.engine.objects) {
             if (obj === this.activeObject) {
-                console.log('Skipping self:', name);
                 continue;
             }
             if (!obj.properties.isContainer) {
-                console.log('Skipping non-container:', name);
                 continue;
             }
             
@@ -158,13 +145,9 @@ export class TiltController {
             const toTarget = new THREE.Vector3().subVectors(targetPos, activePos);
             const distance = toTarget.length();
             
-            console.log('Checking container:', name, 'distance:', distance.toFixed(2));
-            
             if (distance < 15 && distance > 0.01) {
                 const distanceScore = 1 / (1 + distance);
                 const score = distanceScore;
-                
-                candidates.push({ name, distance, score });
                 
                 if (score > bestScore) {
                     bestScore = score;
@@ -175,14 +158,6 @@ export class TiltController {
         }
         
         this.pendingPourTarget = closest;
-        console.log('findPourTarget result:', { 
-            hasTarget: !!closest, 
-            targetName: closest?.name, 
-            distance: minDistance,
-            score: bestScore,
-            candidates: candidates.length,
-            candidateList: candidates.map(c => `${c.name} (${c.distance.toFixed(2)})`)
-        });
     }
     
     showPourModal() {
@@ -432,15 +407,9 @@ export class TiltController {
             console.log('[TiltController] Modal closed, but no activeObject to dismiss');
         }
         this.pendingPourTarget = null;
-        this.activeObject = null;
-        this.hasShownModal = true;
-        this.modalJustClosed = true;
+        this.hasShownModal = false;
+        this.modalJustClosed = false;
         console.log('[TiltController] Modal closed, state reset');
-        
-        setTimeout(() => {
-            this.modalJustClosed = false;
-            console.log('[TiltController] modalJustClosed reset to false');
-        }, 2000);
     }
 
     end() {
