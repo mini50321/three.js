@@ -36,6 +36,271 @@
             outline: none;
         }
 
+        #help-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: rgba(30, 27, 75, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            color: #fff;
+            padding: 0;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #help-button:hover {
+            background: rgba(40, 37, 85, 0.95);
+            border-color: rgba(255, 255, 255, 0.4);
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        #help-popup {
+            display: none;
+            position: absolute;
+            top: 45px;
+            right: 10px;
+            z-index: 1001;
+            background: rgba(10, 8, 40, 0.98);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            padding: 25px;
+            width: 380px;
+            max-width: 90vw;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+        }
+
+        #help-popup.show {
+            display: block;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        #help-popup h3 {
+            margin: 0 0 20px 0;
+            color: #ffb3df;
+            font-size: 20px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 10px;
+        }
+
+        #help-popup .help-section {
+            margin-bottom: 20px;
+        }
+
+        #help-popup .help-section h4 {
+            color: #ffb3df;
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+
+        #help-popup .help-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #help-popup .help-item:last-child {
+            border-bottom: none;
+        }
+
+        #help-popup .key {
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            color: #fff;
+            min-width: 30px;
+            text-align: center;
+            font-size: 13px;
+        }
+
+        #help-popup .description {
+            color: #ccc;
+            font-size: 14px;
+            flex: 1;
+            margin-left: 15px;
+        }
+
+        #help-popup .close-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+
+        #help-popup .close-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        #help-button {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 1000;
+            background: rgba(30, 27, 75, 0.95);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        #help-button:hover {
+            background: rgba(40, 37, 85, 0.98);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        #help-button:active {
+            transform: translateY(0);
+        }
+
+        #help-popup {
+            display: none;
+            position: absolute;
+            top: 60px;
+            right: 15px;
+            z-index: 1001;
+            background: rgba(10, 8, 40, 0.98);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            padding: 25px;
+            width: 380px;
+            max-width: 90vw;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+        }
+
+        #help-popup.show {
+            display: block;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        #help-popup h3 {
+            margin: 0 0 20px 0;
+            color: #ffb3df;
+            font-size: 20px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 10px;
+        }
+
+        #help-popup .help-section {
+            margin-bottom: 20px;
+        }
+
+        #help-popup .help-section h4 {
+            color: #ffb3df;
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+
+        #help-popup .help-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #help-popup .help-item:last-child {
+            border-bottom: none;
+        }
+
+        #help-popup .key {
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            color: #fff;
+            min-width: 30px;
+            text-align: center;
+            font-size: 13px;
+        }
+
+        #help-popup .description {
+            color: #ccc;
+            font-size: 14px;
+            flex: 1;
+            margin-left: 15px;
+        }
+
+        #help-popup .close-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+
+        #help-popup .close-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
         #sidebar {
             width: 350px;
             background: rgba(10, 8, 40, 0.94);
@@ -571,7 +836,73 @@
     </div>
 
     <div id="container">
-        <div id="canvas-container"></div>
+        <div id="canvas-container">
+            <button id="help-button">?</button>
+            <div id="help-popup">
+                <button class="close-button" id="help-close">×</button>
+                <h3>Keyboard Controls</h3>
+                
+                <div class="help-section">
+                    <h4>Movement</h4>
+                    <div class="help-item">
+                        <span class="key">W</span>
+                        <span class="description">Move forward</span>
+                    </div>
+                    <div class="help-item">
+                        <span class="key">S</span>
+                        <span class="description">Move backward</span>
+                    </div>
+                    <div class="help-item">
+                        <span class="key">A</span>
+                        <span class="description">Move left</span>
+                    </div>
+                    <div class="help-item">
+                        <span class="key">D</span>
+                        <span class="description">Move right</span>
+                    </div>
+                    <div class="help-item">
+                        <span class="key">Y</span>
+                        <span class="description">Move up</span>
+                    </div>
+                    <div class="help-item">
+                        <span class="key">H</span>
+                        <span class="description">Move down</span>
+                    </div>
+                </div>
+
+                <div class="help-section">
+                    <h4>Tilting</h4>
+                    <div class="help-item">
+                        <span class="key">I</span>
+                        <span class="description">Tilt forward</span>
+                    </div>
+                    <div class="help-item">
+                        <span class="key">K</span>
+                        <span class="description">Tilt backward</span>
+                    </div>
+                    <div class="help-item">
+                        <span class="key">J</span>
+                        <span class="description">Tilt left</span>
+                    </div>
+                    <div class="help-item">
+                        <span class="key">L</span>
+                        <span class="description">Tilt right</span>
+                    </div>
+                </div>
+
+                <div class="help-section">
+                    <h4>Actions</h4>
+                    <div class="help-item">
+                        <span class="key">U</span>
+                        <span class="description">Swirl/Stir (hold)</span>
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255, 255, 255, 0.2); color: #aaa; font-size: 12px;">
+                    <strong>Note:</strong> Select an object first to use keyboard controls.
+                </div>
+            </div>
+        </div>
         <div id="sidebar">
             <h2 id="experiment-title">Experiment</h2>
             
@@ -1967,6 +2298,35 @@
         }, 100);
 
         loadExperiment();
+
+        const helpButton = document.getElementById('help-button');
+        const helpPopup = document.getElementById('help-popup');
+        const helpClose = document.getElementById('help-close');
+
+        if (helpButton && helpPopup && helpClose) {
+            helpButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                helpPopup.classList.toggle('show');
+            });
+
+            helpClose.addEventListener('click', () => {
+                helpPopup.classList.remove('show');
+            });
+
+            document.addEventListener('click', (e) => {
+                if (helpPopup.classList.contains('show') && 
+                    !helpPopup.contains(e.target) && 
+                    !helpButton.contains(e.target)) {
+                    helpPopup.classList.remove('show');
+                }
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && helpPopup.classList.contains('show')) {
+                    helpPopup.classList.remove('show');
+                }
+            });
+        }
     </script>
 </body>
 </html>
