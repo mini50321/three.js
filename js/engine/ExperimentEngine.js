@@ -2881,24 +2881,71 @@ export class ExperimentEngine {
         const effect = {
             type: 'smoke',
             particles: [],
-            active: true
+            active: true,
+            object: obj,
+            time: 0
         };
         
-        const baseCount = 15;
+        const baseCount = 80;
         const particleCount = this.performanceManager.getParticleCount(baseCount);
         
+        obj.mesh.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(obj.mesh);
+        if (!box || box.isEmpty()) {
+            console.warn(`Cannot create smoke effect for ${obj.name}: invalid bounding box`);
+            return;
+        }
+        
+        const sizeVec = box.getSize(new THREE.Vector3());
+        const minYWorld = box.min.y;
+        const maxYWorld = box.max.y;
+        const containerCenter = box.getCenter(new THREE.Vector3());
+        
+        const volume = this.calculateVolume(obj);
+        const liquidHeight = this.calculateLiquidHeight(obj, volume);
+        const containerBottom = minYWorld;
+        const liquidBottom = containerBottom + (sizeVec.y * 0.05);
+        const liquidSurfaceY = liquidBottom + liquidHeight;
+        const beakerTopY = maxYWorld - sizeVec.y * 0.02;
+        const spawnY = volume > 0.001 ? liquidSurfaceY : beakerTopY;
+        
         for (let i = 0; i < particleCount; i++) {
+            const size = 0.008 + Math.random() * 0.012;
             const particle = new THREE.Mesh(
-                new THREE.SphereGeometry(0.05, 8, 8),
-                new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.4 })
+                new THREE.SphereGeometry(size, 6, 6),
+                new THREE.MeshBasicMaterial({ 
+                    color: 0xcccccc,
+                    transparent: true, 
+                    opacity: 0.15 + Math.random() * 0.25
+                })
             );
-            particle.position.copy(obj.mesh.position);
-            particle.position.y += 0.3;
+            
+            particle.position.set(
+                containerCenter.x + (Math.random() - 0.5) * sizeVec.x * 0.3,
+                spawnY + Math.random() * 0.05,
+                containerCenter.z + (Math.random() - 0.5) * sizeVec.z * 0.3
+            );
+            
+            const baseVelocityY = 0.04 + Math.random() * 0.06;
             particle.velocity = new THREE.Vector3(
-                (Math.random() - 0.5) * 0.05,
-                Math.random() * 0.1 + 0.05,
-                (Math.random() - 0.5) * 0.05
+                (Math.random() - 0.5) * 0.02,
+                baseVelocityY,
+                (Math.random() - 0.5) * 0.02
             );
+            
+            particle.userData = {
+                baseSize: size,
+                baseOpacity: particle.material.opacity,
+                baseY: spawnY,
+                spawnY: spawnY,
+                life: 1.0,
+                turbulence: {
+                    x: (Math.random() - 0.5) * 0.02,
+                    z: (Math.random() - 0.5) * 0.02,
+                    phase: Math.random() * Math.PI * 2
+                }
+            };
+            
             this.scene.add(particle);
             effect.particles.push(particle);
         }
@@ -3059,6 +3106,103 @@ export class ExperimentEngine {
                         }
                     }
                 });
+            } else if (effect.type === 'smoke') {
+                const obj = effect.object;
+                if (!obj) {
+                    const objectName = key.replace('_smoke', '');
+                    obj = this.objects.get(objectName);
+                    if (obj) effect.object = obj;
+                }
+                
+                const hasGas = obj && this.hasGasContent(obj);
+                effect.time += 0.016;
+                
+                if (!hasGas || !obj) {
+                    effect.particles.forEach(particle => {
+                        particle.material.opacity *= 0.95;
+                        if (particle.material.opacity < 0.01) {
+                            particle.position.y = -1000;
+                            particle.velocity.multiplyScalar(0);
+                        } else {
+                            particle.position.add(particle.velocity);
+                        }
+                    });
+                    return;
+                }
+                
+                obj.mesh.updateMatrixWorld(true);
+                const box = new THREE.Box3().setFromObject(obj.mesh);
+                if (!box || box.isEmpty()) {
+                    return;
+                }
+                
+                const sizeVec = box.getSize(new THREE.Vector3());
+                const minYWorld = box.min.y;
+                const maxYWorld = box.max.y;
+                const containerCenter = box.getCenter(new THREE.Vector3());
+                
+                const volume = this.calculateVolume(obj);
+                const liquidHeight = this.calculateLiquidHeight(obj, volume);
+                const containerBottom = minYWorld;
+                const liquidBottom = containerBottom + (sizeVec.y * 0.05);
+                const liquidSurfaceY = liquidBottom + liquidHeight;
+                const beakerTopY = maxYWorld - sizeVec.y * 0.02;
+                const spawnY = volume > 0.001 ? liquidSurfaceY : beakerTopY;
+                const maxHeight = maxYWorld + 3;
+                
+                effect.particles.forEach(particle => {
+                    const userData = particle.userData;
+                    
+                    particle.velocity.x += Math.sin(effect.time * 2 + userData.turbulence.phase) * 0.001;
+                    particle.velocity.z += Math.cos(effect.time * 2 + userData.turbulence.phase) * 0.001;
+                    particle.velocity.x *= 0.99;
+                    particle.velocity.z *= 0.99;
+                    
+                    particle.position.add(particle.velocity);
+                    
+                    const heightAboveBase = particle.position.y - userData.spawnY;
+                    const expansionFactor = 1 + heightAboveBase * 0.3;
+                    const currentSize = userData.baseSize * expansionFactor;
+                    particle.scale.set(currentSize / userData.baseSize, currentSize / userData.baseSize, currentSize / userData.baseSize);
+                    
+                    userData.life -= 0.0015;
+                    const fadeStart = 0.3;
+                    if (userData.life < fadeStart) {
+                        particle.material.opacity = userData.baseOpacity * (userData.life / fadeStart);
+                    }
+                    
+                    const shouldRegenerate = particle.material.opacity < 0.01 || 
+                        particle.position.y > maxHeight ||
+                        userData.life <= 0;
+                    
+                    if (shouldRegenerate) {
+                        const size = 0.008 + Math.random() * 0.012;
+                        particle.geometry.dispose();
+                        particle.geometry = new THREE.SphereGeometry(size, 6, 6);
+                        particle.material.opacity = 0.15 + Math.random() * 0.25;
+                        
+                        particle.position.set(
+                            containerCenter.x + (Math.random() - 0.5) * sizeVec.x * 0.3,
+                            spawnY + Math.random() * 0.05,
+                            containerCenter.z + (Math.random() - 0.5) * sizeVec.z * 0.3
+                        );
+                        
+                        const baseVelocityY = 0.04 + Math.random() * 0.06;
+                        particle.velocity.set(
+                            (Math.random() - 0.5) * 0.02,
+                            baseVelocityY,
+                            (Math.random() - 0.5) * 0.02
+                        );
+                        
+                        particle.scale.set(1, 1, 1);
+                        userData.baseSize = size;
+                        userData.baseOpacity = particle.material.opacity;
+                        userData.baseY = spawnY;
+                        userData.spawnY = spawnY;
+                        userData.life = 1.0;
+                        userData.turbulence.phase = Math.random() * Math.PI * 2;
+                    }
+                });
             } else {
                 effect.particles.forEach(particle => {
                     particle.position.add(particle.velocity);
@@ -3211,7 +3355,7 @@ export class ExperimentEngine {
             return;
         }
         
-        const reactionRate = 0.15;
+        const reactionRate = 0.1;
         let totalReactedVolume = 0;
         let totalReactedMass = 0;
         let hasReaction = false;
