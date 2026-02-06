@@ -1139,13 +1139,39 @@
                     
                     const reaction = engine.checkChemicalReaction(engine.selectedObject);
                     if (reaction) {
-                        engine.processChemicalReaction(engine.selectedObject, reaction);
-                        reactionStatus.textContent = `Reaction occurred: ${reaction.message || 'Chemical reaction'}`;
-                        reactionStatus.style.color = '#4CAF50';
+                        let reactionCount = 0;
+                        const maxReactions = 20;
                         
-                        setTimeout(() => {
-                            reactionStatus.textContent = '';
-                        }, 5000);
+                        const processReaction = () => {
+                            const currentReaction = engine.checkChemicalReaction(engine.selectedObject);
+                            if (currentReaction && reactionCount < maxReactions) {
+                                engine.processChemicalReaction(engine.selectedObject, currentReaction);
+                                reactionCount++;
+                                
+                                const hasReactants = engine.selectedObject.properties.contents.some(c => {
+                                    const type = (c.type || '').toLowerCase();
+                                    return currentReaction.reactants.some(r => type.includes(r.toLowerCase()));
+                                });
+                                
+                                if (hasReactants) {
+                                    setTimeout(processReaction, 200);
+                                } else {
+                                    reactionStatus.textContent = `Reaction complete: ${reaction.message || 'Chemical reaction'}`;
+                                    reactionStatus.style.color = '#4CAF50';
+                                    setTimeout(() => {
+                                        reactionStatus.textContent = '';
+                                    }, 5000);
+                                }
+                            } else {
+                                reactionStatus.textContent = `Reaction occurred: ${reaction.message || 'Chemical reaction'}`;
+                                reactionStatus.style.color = '#4CAF50';
+                                setTimeout(() => {
+                                    reactionStatus.textContent = '';
+                                }, 5000);
+                            }
+                        };
+                        
+                        processReaction();
                     } else {
                         reactionStatus.textContent = 'No reaction possible with current contents';
                         reactionStatus.style.color = '#FF9800';

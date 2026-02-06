@@ -1773,6 +1773,30 @@ export class ExperimentEngine {
                 }
                 
                 this.updateEffects(obj);
+                
+                if (obj.properties.isContainer && obj.properties.contents && obj.properties.contents.length > 0) {
+                    const reaction = this.checkChemicalReaction(obj);
+                    if (reaction) {
+                        const hasReactants = obj.properties.contents.some(c => {
+                            const type = (c.type || '').toLowerCase();
+                            return reaction.reactants.some(r => {
+                                const reactantType = r.toLowerCase();
+                                const state = this.getChemicalState(c.type);
+                                if (state === 'solid' && c.mass !== undefined) {
+                                    return type.includes(reactantType) && c.mass > 0.001;
+                                } else if (state === 'liquid' && c.volume !== undefined) {
+                                    return type.includes(reactantType) && c.volume > 0.001;
+                                }
+                                return false;
+                            });
+                        });
+                        
+                        if (hasReactants && this.updateThrottleCounter % 30 === 0) {
+                            this.processChemicalReaction(obj, reaction);
+                        }
+                    }
+                }
+                
                 this.updateMeasurements(obj);
             }
             
@@ -3162,12 +3186,7 @@ export class ExperimentEngine {
                     continue;
                 }
                 
-                const isAlreadyReacted = obj.properties.reactedReactions && 
-                    obj.properties.reactedReactions.some(r => r.type === reaction.result.type);
-                
-                if (!isAlreadyReacted) {
-                    return reaction;
-                }
+                return reaction;
             }
         }
         
@@ -3178,26 +3197,68 @@ export class ExperimentEngine {
         if (!reaction || !obj.properties.contents) return;
         
         const reactants = reaction.reactants.map(r => r.toLowerCase());
-        const contentTypes = obj.properties.contents.map(c => (c.type || '').toLowerCase());
         
-        let totalVolume = 0;
-        const consumedContents = [];
-        
-        obj.properties.contents.forEach((content, index) => {
+        const reactantContents = [];
+        obj.properties.contents.forEach((content) => {
             const type = (content.type || '').toLowerCase();
             const isReactant = reactants.some(reactant => type.includes(reactant));
-            
             if (isReactant) {
-                totalVolume += content.volume || 0;
-                consumedContents.push(index);
+                reactantContents.push({ content, type });
             }
         });
         
-        consumedContents.reverse().forEach(index => {
-            obj.properties.contents.splice(index, 1);
+        if (reactantContents.length < reactants.length) {
+            return;
+        }
+        
+        const reactionRate = 0.15;
+        let totalReactedVolume = 0;
+        let totalReactedMass = 0;
+        let hasReaction = false;
+        
+        reactantContents.forEach(({ content }) => {
+            const state = this.getChemicalState(content.type);
+            
+            if (state === 'solid' && content.mass !== undefined && content.mass > 0.001) {
+                const reactedMass = Math.min(content.mass * reactionRate, content.mass);
+                if (reactedMass > 0.001) {
+                    content.mass -= reactedMass;
+                    totalReactedMass += reactedMass;
+                    hasReaction = true;
+                    
+                    const density = 1.5;
+                    totalReactedVolume += reactedMass / density;
+                    
+                    if (content.mass <= 0.001) {
+                        content.mass = 0;
+                    }
+                }
+            } else if (state === 'liquid' && content.volume !== undefined && content.volume > 0.001) {
+                const reactedVolume = Math.min(content.volume * reactionRate, content.volume);
+                if (reactedVolume > 0.001) {
+                    content.volume -= reactedVolume;
+                    totalReactedVolume += reactedVolume;
+                    hasReaction = true;
+                    
+                    if (content.volume <= 0.001) {
+                        content.volume = 0;
+                    }
+                }
+            }
         });
         
-        if (reaction.result && totalVolume > 0) {
+        obj.properties.contents = obj.properties.contents.filter(c => {
+            const state = this.getChemicalState(c.type);
+            if (state === 'solid') {
+                return (c.mass || 0) > 0.001;
+            } else if (state === 'liquid') {
+                return (c.volume || 0) > 0.001;
+            } else {
+                return (c.volume || 0) > 0.001;
+            }
+        });
+        
+        if (reaction.result && hasReaction && (totalReactedVolume > 0.001 || totalReactedMass > 0.001)) {
             const productType = reaction.result.type || 'product';
             const productState = this.getChemicalState(productType);
             
@@ -3205,17 +3266,21 @@ export class ExperimentEngine {
                 c => (c.type || '').toLowerCase() === productType.toLowerCase()
             );
             
+            const productAmount = totalReactedVolume > 0.001 ? totalReactedVolume : (totalReactedMass / 1.5);
+            
             if (existingProduct) {
                 if (productState === 'solid') {
-                    existingProduct.mass = (existingProduct.mass || 0) + (totalVolume * 0.5);
+                    existingProduct.mass = (existingProduct.mass || 0) + (productAmount * 0.5);
+                } else if (productState === 'gas') {
+                    existingProduct.volume = (existingProduct.volume || 0) + productAmount;
                 } else {
-                    existingProduct.volume += totalVolume;
+                    existingProduct.volume = (existingProduct.volume || 0) + productAmount;
                 }
             } else {
                 const newProduct = {
                     type: productType,
-                    volume: productState === 'solid' ? 0 : totalVolume,
-                    mass: productState === 'solid' ? (totalVolume * 0.5) : undefined
+                    volume: productState === 'solid' ? 0 : productAmount,
+                    mass: productState === 'solid' ? (productAmount * 0.5) : undefined
                 };
                 obj.properties.contents.push(newProduct);
             }
@@ -3227,15 +3292,20 @@ export class ExperimentEngine {
             }
         }
         
-        if (!obj.properties.reactedReactions) {
-            obj.properties.reactedReactions = [];
+        if (hasReaction) {
+            if (!obj.properties.reactedReactions) {
+                obj.properties.reactedReactions = [];
+            }
+            
+            const hasReactedBefore = obj.properties.reactedReactions.some(r => r.type === reaction.result.type);
+            if (!hasReactedBefore) {
+                obj.properties.reactedReactions.push({
+                    type: reaction.result.type,
+                    timestamp: Date.now()
+                });
+                this.addFeedback(reaction.message || 'Chemical reaction occurred');
+            }
         }
-        obj.properties.reactedReactions.push({
-            type: reaction.result.type,
-            timestamp: Date.now()
-        });
-        
-        this.addFeedback(reaction.message || 'Chemical reaction occurred');
         
         if (this.updateLiquidMesh) {
             this.updateLiquidMesh(obj);
