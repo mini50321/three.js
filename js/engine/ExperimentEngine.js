@@ -2901,13 +2901,15 @@ export class ExperimentEngine {
         const maxYWorld = box.max.y;
         const containerCenter = box.getCenter(new THREE.Vector3());
         
-        const volume = this.calculateVolume(obj);
-        const liquidHeight = this.calculateLiquidHeight(obj, volume);
+        const liquidContents = obj.properties.contents ? 
+            obj.properties.contents.filter(c => this.getChemicalState(c.type) === 'liquid' && (c.volume || 0) > 0.001) : [];
+        const liquidVolume = liquidContents.reduce((sum, c) => sum + (c.volume || 0), 0);
+        const liquidHeight = this.calculateLiquidHeight(obj, liquidVolume);
         const containerBottom = minYWorld;
         const liquidBottom = containerBottom + (sizeVec.y * 0.05);
         const liquidSurfaceY = liquidBottom + liquidHeight;
         const beakerTopY = maxYWorld - sizeVec.y * 0.02;
-        const spawnY = volume > 0.001 ? liquidSurfaceY : beakerTopY;
+        const spawnY = liquidVolume > 0.001 ? liquidSurfaceY : beakerTopY;
         
         for (let i = 0; i < particleCount; i++) {
             const size = 0.008 + Math.random() * 0.012;
@@ -3141,13 +3143,15 @@ export class ExperimentEngine {
                 const maxYWorld = box.max.y;
                 const containerCenter = box.getCenter(new THREE.Vector3());
                 
-                const volume = this.calculateVolume(obj);
-                const liquidHeight = this.calculateLiquidHeight(obj, volume);
+                const liquidContents = obj.properties.contents ? 
+                    obj.properties.contents.filter(c => this.getChemicalState(c.type) === 'liquid' && (c.volume || 0) > 0.001) : [];
+                const liquidVolume = liquidContents.reduce((sum, c) => sum + (c.volume || 0), 0);
+                const liquidHeight = this.calculateLiquidHeight(obj, liquidVolume);
                 const containerBottom = minYWorld;
                 const liquidBottom = containerBottom + (sizeVec.y * 0.05);
                 const liquidSurfaceY = liquidBottom + liquidHeight;
                 const beakerTopY = maxYWorld - sizeVec.y * 0.02;
-                const spawnY = volume > 0.001 ? liquidSurfaceY : beakerTopY;
+                const spawnY = liquidVolume > 0.001 ? liquidSurfaceY : beakerTopY;
                 const maxHeight = maxYWorld + 3;
                 
                 effect.particles.forEach(particle => {
@@ -3250,9 +3254,7 @@ export class ExperimentEngine {
                     if (state === 'solid' && content.mass !== undefined) {
                         const density = 1.5;
                         totalVolume += (content.mass || 0) / density;
-                    } else if (state === 'gas') {
-                        totalVolume += (content.volume || 0) * 0.1;
-                    } else if (content.volume !== undefined) {
+                    } else if (state === 'liquid' && content.volume !== undefined) {
                         totalVolume += content.volume || 0;
                     }
                 } else if (typeof content === 'string') {
@@ -3358,6 +3360,7 @@ export class ExperimentEngine {
         const reactionRate = 0.1;
         let totalReactedVolume = 0;
         let totalReactedMass = 0;
+        let liquidReactedVolume = 0;
         let hasReaction = false;
         
         reactantContents.forEach(({ content }) => {
@@ -3382,6 +3385,7 @@ export class ExperimentEngine {
                 if (reactedVolume > 0.001) {
                     content.volume -= reactedVolume;
                     totalReactedVolume += reactedVolume;
+                    liquidReactedVolume += reactedVolume;
                     hasReaction = true;
                     
                     if (content.volume <= 0.001) {
@@ -3429,7 +3433,22 @@ export class ExperimentEngine {
                 obj.properties.contents.push(newProduct);
             }
             
-            if (productState === 'gas') {
+            if (productType.toLowerCase() === 'co2' && productState === 'gas') {
+                if (liquidReactedVolume > 0.001) {
+                    const existingWater = obj.properties.contents.find(
+                        c => (c.type || '').toLowerCase() === 'water'
+                    );
+                    if (existingWater) {
+                        existingWater.volume = (existingWater.volume || 0) + liquidReactedVolume;
+                    } else {
+                        obj.properties.contents.push({ type: 'water', volume: liquidReactedVolume });
+                    }
+                }
+                
+                if (!this.effects.has(obj.name + '_smoke')) {
+                    this.createSmokeEffect(obj);
+                }
+            } else if (productState === 'gas') {
                 if (!this.effects.has(obj.name + '_smoke')) {
                     this.createSmokeEffect(obj);
                 }
@@ -3777,20 +3796,20 @@ export class ExperimentEngine {
         const liquidContents = obj.properties.contents ? 
             obj.properties.contents.filter(c => this.getChemicalState(c.type) === 'liquid' && (c.volume || 0) > 0.001) : [];
         
-        const volume = liquidContents.reduce((sum, c) => sum + (c.volume || 0), 0);
+        const liquidVolume = liquidContents.reduce((sum, c) => sum + (c.volume || 0), 0);
         const hasContents = liquidContents.length > 0;
-        const liquidHeight = this.calculateLiquidHeight(obj, volume);
+        const liquidHeight = this.calculateLiquidHeight(obj, liquidVolume);
         
         const liquidMesh = this.liquidMeshes.get(obj.name);
         
-        if (liquidHeight <= 0 || volume <= 0 || !hasContents) {
+        if (liquidHeight <= 0 || liquidVolume <= 0 || !hasContents) {
             if (liquidMesh) {
                 this.scene.remove(liquidMesh);
                 liquidMesh.geometry.dispose();
                 liquidMesh.material.dispose();
                 this.liquidMeshes.delete(obj.name);
             }
-            if (obj.properties.volume !== undefined && volume <= 0) {
+            if (obj.properties.volume !== undefined && liquidVolume <= 0) {
                 obj.properties.volume = 0;
             }
             return;
@@ -3884,11 +3903,8 @@ export class ExperimentEngine {
         
         const density = 1.5;
         const powderVolume = totalMass / density;
-        const capacity = obj.properties.capacity || 1000;
-        const fillRatio = Math.min(powderVolume / capacity, 1);
-        const powderHeight = size.y * fillRatio * 0.85;
         
-        if (powderHeight <= 0) return;
+        if (powderVolume <= 0) return;
         
         const objName = obj.name.toLowerCase();
         const isCylinder = objName.includes('cylinder') || objName.includes('graduated');
@@ -3898,11 +3914,18 @@ export class ExperimentEngine {
         const powderRadius = containerRadius * Math.sqrt(areaRatio);
         const radius = powderRadius;
         
+        const powderArea = Math.PI * powderRadius * powderRadius;
+        const powderHeight = powderVolume / powderArea;
+        const maxHeight = size.y * 0.1;
+        const finalPowderHeight = Math.min(powderHeight, maxHeight);
+        
+        if (finalPowderHeight <= 0) return;
+        
         let powderMesh = this.powderMeshes.get(obj.name);
         
         if (!powderMesh) {
             const segments = this.performanceManager.getGeometrySegments();
-            const geometry = new THREE.CylinderGeometry(radius, radius, powderHeight, segments);
+            const geometry = new THREE.CylinderGeometry(radius, radius, finalPowderHeight, segments);
             const material = new THREE.MeshStandardMaterial({
                 color: 0xcccccc,
                 transparent: true,
@@ -3914,15 +3937,15 @@ export class ExperimentEngine {
             this.powderMeshes.set(obj.name, powderMesh);
             this.scene.add(powderMesh);
         } else {
-            if (Math.abs(powderMesh.geometry.parameters.height - powderHeight) > 0.01) {
+            if (Math.abs(powderMesh.geometry.parameters.height - finalPowderHeight) > 0.01) {
                 powderMesh.geometry.dispose();
                 const segments = this.performanceManager.getGeometrySegments();
-                powderMesh.geometry = new THREE.CylinderGeometry(radius, radius, powderHeight, segments);
+                powderMesh.geometry = new THREE.CylinderGeometry(radius, radius, finalPowderHeight, segments);
             }
         }
         
         const powderBottom = minYWorld + (size.y * 0.05);
-        const powderCenterY = powderBottom + powderHeight / 2;
+        const powderCenterY = powderBottom + finalPowderHeight / 2;
         powderMesh.position.set(containerCenter.x, powderCenterY, containerCenter.z);
         powderMesh.rotation.copy(obj.mesh.rotation);
         powderMesh.renderOrder = 0;

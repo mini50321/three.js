@@ -1105,8 +1105,22 @@
                     if (engine.updatePowderMesh) {
                         engine.updatePowderMesh(engine.selectedObject);
                     }
+                    
+                    const liquidContents = engine.selectedObject.properties.contents ? 
+                        engine.selectedObject.properties.contents.filter(c => {
+                            const state = engine.getChemicalState ? engine.getChemicalState(c.type) : 'liquid';
+                            return state === 'liquid' && (c.volume || 0) > 0.001;
+                        }) : [];
+                    const liquidVolume = liquidContents.reduce((sum, c) => sum + (c.volume || 0), 0);
+                    
+                    if (engine.updateLiquidMesh) {
+                        engine.updateLiquidMesh(engine.selectedObject);
+                    }
+                    
                     if (engine.updateMeasurements) {
-                        engine.updateMeasurements(engine.selectedObject);
+                        const volume = engine.calculateVolume(engine.selectedObject);
+                        engine.measurements.volume[engine.selectedObject.name] = volume;
+                        engine.measurements.temperature[engine.selectedObject.name] = engine.selectedObject.properties.temperature;
                     }
                     
                     const volumeInput = document.getElementById('volume-input');
@@ -1118,7 +1132,7 @@
                         window.updateMeasurements();
                     }
                     
-                    console.log(`Added ${volume}ml (${mass.toFixed(2)}g) of ${type} powder to ${engine.selectedObject.name}. New volume: ${newVolume.toFixed(2)}ml`);
+                    console.log(`Added ${volume}ml (${mass.toFixed(2)}g) of ${type} powder to ${engine.selectedObject.name}. New volume: ${newVolume.toFixed(2)}ml, Liquid volume: ${liquidVolume.toFixed(2)}ml`);
                 });
             }
 
