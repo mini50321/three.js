@@ -138,6 +138,36 @@ if ($_POST['mode'] === 'create') {
         }
     }
 
+    $powderColors = [];
+    if (!empty($_POST['powderColors']) && is_array($_POST['powderColors'])) {
+        foreach ($_POST['powderColors'] as $powderColor) {
+            if (!empty($powderColor['type']) && !empty($powderColor['color'])) {
+                $colorStr = ltrim($powderColor['color'], '#');
+                $color = hexdec($colorStr);
+                
+                $powderColors[] = [
+                    'type' => strtolower(trim($powderColor['type'])),
+                    'color' => $color
+                ];
+            }
+        }
+    }
+
+    $smokeColors = [];
+    if (!empty($_POST['smokeColors']) && is_array($_POST['smokeColors'])) {
+        foreach ($_POST['smokeColors'] as $smokeColor) {
+            if (!empty($smokeColor['type']) && !empty($smokeColor['color'])) {
+                $colorStr = ltrim($smokeColor['color'], '#');
+                $color = hexdec($colorStr);
+                
+                $smokeColors[] = [
+                    'type' => strtolower(trim($smokeColor['type'])),
+                    'color' => $color
+                ];
+            }
+        }
+    }
+
     $experimentData = [
         "id" => uniqid("exp_"),
         "title" => $_POST['title'],
@@ -146,7 +176,9 @@ if ($_POST['mode'] === 'create') {
         "models" => $models,
         "steps" => $steps,
         "initialState" => $initialState,
-        "reactions" => $reactions
+        "reactions" => $reactions,
+        "powderColors" => $powderColors,
+        "smokeColors" => $smokeColors
     ];
 
     try {
@@ -297,6 +329,36 @@ if ($_POST['mode'] === 'create') {
         }
     }
 
+    $powderColors = [];
+    if (!empty($_POST['powderColors']) && is_array($_POST['powderColors'])) {
+        foreach ($_POST['powderColors'] as $powderColor) {
+            if (!empty($powderColor['type']) && !empty($powderColor['color'])) {
+                $colorStr = ltrim($powderColor['color'], '#');
+                $color = hexdec($colorStr);
+                
+                $powderColors[] = [
+                    'type' => strtolower(trim($powderColor['type'])),
+                    'color' => $color
+                ];
+            }
+        }
+    }
+
+    $smokeColors = [];
+    if (!empty($_POST['smokeColors']) && is_array($_POST['smokeColors'])) {
+        foreach ($_POST['smokeColors'] as $smokeColor) {
+            if (!empty($smokeColor['type']) && !empty($smokeColor['color'])) {
+                $colorStr = ltrim($smokeColor['color'], '#');
+                $color = hexdec($colorStr);
+                
+                $smokeColors[] = [
+                    'type' => strtolower(trim($smokeColor['type'])),
+                    'color' => $color
+                ];
+            }
+        }
+    }
+
     $experimentData = [
         "title" => $_POST['title'],
         "subject" => $_POST['subject'],
@@ -304,7 +366,9 @@ if ($_POST['mode'] === 'create') {
         "models" => $models,
         "steps" => $steps,
         "initialState" => $initialState,
-        "reactions" => $reactions
+        "reactions" => $reactions,
+        "powderColors" => $powderColors,
+        "smokeColors" => $smokeColors
     ];
 
     try {

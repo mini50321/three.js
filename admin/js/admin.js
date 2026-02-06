@@ -7,6 +7,8 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 let initialStateIndex = 0;
 let reactionIndex = 0;
+let powderColorIndex = 0;
+let smokeColorIndex = 0;
 
 function addStep() {
     const div = document.createElement('div');
@@ -570,6 +572,132 @@ function loadReactions(reactionsData) {
             `;
             container.appendChild(div);
             reactionIndex++;
+        });
+    }
+}
+
+function addPowderColor() {
+    const div = document.createElement('div');
+    div.className = 'powder-color-card';
+    div.style.cssText = 'background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e0e6ed;';
+    div.innerHTML = `
+        <div style="display: flex; gap: 15px; align-items: flex-end;">
+            <div class="form-group" style="flex: 1;">
+                <label>Powder Type</label>
+                <input type="text" name="powderColors[${powderColorIndex}][type]" placeholder="e.g., carbonate, salt, sugar" required>
+                <small>Name of the powder/crystal/salt</small>
+            </div>
+            <div class="form-group" style="flex: 1;">
+                <label>Color (Hex)</label>
+                <input type="text" name="powderColors[${powderColorIndex}][color]" placeholder="#ffffff" value="#ffffff" pattern="#[0-9a-fA-F]{6}" required>
+                <small>Hex color code</small>
+            </div>
+            <div>
+                <button type="button" onclick="this.closest('.powder-color-card').remove()" class="btn btn-danger">Remove</button>
+            </div>
+        </div>
+    `;
+    const container = document.getElementById('powder-colors');
+    if (container) {
+        container.appendChild(div);
+        powderColorIndex++;
+    }
+}
+
+function loadPowderColors(powderColorsData) {
+    const container = document.getElementById('powder-colors');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    powderColorIndex = 0;
+    
+    if (powderColorsData && Array.isArray(powderColorsData)) {
+        powderColorsData.forEach((powderColor) => {
+            const div = document.createElement('div');
+            div.className = 'powder-color-card';
+            div.style.cssText = 'background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e0e6ed;';
+            div.innerHTML = `
+                <div style="display: flex; gap: 15px; align-items: flex-end;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Powder Type</label>
+                        <input type="text" name="powderColors[${powderColorIndex}][type]" value="${powderColor.type || ''}" placeholder="e.g., carbonate, salt, sugar" required>
+                        <small>Name of the powder/crystal/salt</small>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>Color (Hex)</label>
+                        <input type="text" name="powderColors[${powderColorIndex}][color]" value="${powderColor.color || '#ffffff'}" placeholder="#ffffff" pattern="#[0-9a-fA-F]{6}" required>
+                        <small>Hex color code</small>
+                    </div>
+                    <div>
+                        <button type="button" onclick="this.closest('.powder-color-card').remove()" class="btn btn-danger">Remove</button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+            powderColorIndex++;
+        });
+    }
+}
+
+function addSmokeColor() {
+    const div = document.createElement('div');
+    div.className = 'smoke-color-card';
+    div.style.cssText = 'background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e0e6ed;';
+    div.innerHTML = `
+        <div style="display: flex; gap: 15px; align-items: flex-end;">
+            <div class="form-group" style="flex: 1;">
+                <label>Gas Type</label>
+                <input type="text" name="smokeColors[${smokeColorIndex}][type]" placeholder="e.g., co2, oxygen, hydrogen" required>
+                <small>Name of the gas that produces smoke</small>
+            </div>
+            <div class="form-group" style="flex: 1;">
+                <label>Color (Hex)</label>
+                <input type="text" name="smokeColors[${smokeColorIndex}][color]" placeholder="#cccccc" value="#cccccc" pattern="#[0-9a-fA-F]{6}" required>
+                <small>Hex color code for smoke particles</small>
+            </div>
+            <div>
+                <button type="button" onclick="this.closest('.smoke-color-card').remove()" class="btn btn-danger">Remove</button>
+            </div>
+        </div>
+    `;
+    const container = document.getElementById('smoke-colors');
+    if (container) {
+        container.appendChild(div);
+        smokeColorIndex++;
+    }
+}
+
+function loadSmokeColors(smokeColorsData) {
+    const container = document.getElementById('smoke-colors');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    smokeColorIndex = 0;
+    
+    if (smokeColorsData && Array.isArray(smokeColorsData)) {
+        smokeColorsData.forEach((smokeColor) => {
+            const div = document.createElement('div');
+            div.className = 'smoke-color-card';
+            div.style.cssText = 'background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e0e6ed;';
+            div.innerHTML = `
+                <div style="display: flex; gap: 15px; align-items: flex-end;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Gas Type</label>
+                        <input type="text" name="smokeColors[${smokeColorIndex}][type]" value="${smokeColor.type || ''}" placeholder="e.g., co2, oxygen, hydrogen" required>
+                        <small>Name of the gas that produces smoke</small>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>Color (Hex)</label>
+                        <input type="text" name="smokeColors[${smokeColorIndex}][color]" value="${smokeColor.color || '#cccccc'}" placeholder="#cccccc" pattern="#[0-9a-fA-F]{6}" required>
+                        <small>Hex color code for smoke particles</small>
+                    </div>
+                    <div>
+                        <button type="button" onclick="this.closest('.smoke-color-card').remove()" class="btn btn-danger">Remove</button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+            smokeColorIndex++;
         });
     }
 }

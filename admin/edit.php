@@ -157,7 +157,59 @@ if (!$exp) {
                     });
                 </script>
 
-                <h3>Experiment Steps</h3>
+                <h3 style="margin-top: 30px;">Powder/Crystal/Salt Colors</h3>
+                <p style="color: #7f8c8d; font-size: 14px; margin-bottom: 15px;">Configure the visual colors for different powder, crystal, and salt types.</p>
+                <div id="powder-colors"></div>
+                <div style="margin-top: 15px;">
+                    <button type="button" onclick="addPowderColor()" class="btn btn-secondary">+ Add Powder Color</button>
+                </div>
+                <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const powderColorsData = <?php
+                            $powderColorsForJS = [];
+                            if (!empty($exp['powderColors']) && is_array($exp['powderColors'])) {
+                                foreach ($exp['powderColors'] as $pc) {
+                                    $powderColorsForJS[] = [
+                                        'type' => $pc['type'] ?? '',
+                                        'color' => '#' . str_pad(dechex($pc['color'] ?? 0xffffff), 6, '0', STR_PAD_LEFT)
+                                    ];
+                                }
+                            }
+                            echo json_encode($powderColorsForJS, JSON_HEX_APOS | JSON_HEX_QUOT);
+                        ?>;
+                        if (typeof loadPowderColors === 'function') {
+                            loadPowderColors(powderColorsData);
+                        }
+                    });
+                </script>
+
+                <h3 style="margin-top: 30px;">Smoke/Gas Colors</h3>
+                <p style="color: #7f8c8d; font-size: 14px; margin-bottom: 15px;">Configure the visual colors for smoke particles emitted by different gas types.</p>
+                <div id="smoke-colors"></div>
+                <div style="margin-top: 15px;">
+                    <button type="button" onclick="addSmokeColor()" class="btn btn-secondary">+ Add Smoke Color</button>
+                </div>
+                <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const smokeColorsData = <?php
+                            $smokeColorsForJS = [];
+                            if (!empty($exp['smokeColors']) && is_array($exp['smokeColors'])) {
+                                foreach ($exp['smokeColors'] as $sc) {
+                                    $smokeColorsForJS[] = [
+                                        'type' => $sc['type'] ?? '',
+                                        'color' => '#' . str_pad(dechex($sc['color'] ?? 0xcccccc), 6, '0', STR_PAD_LEFT)
+                                    ];
+                                }
+                            }
+                            echo json_encode($smokeColorsForJS, JSON_HEX_APOS | JSON_HEX_QUOT);
+                        ?>;
+                        if (typeof loadSmokeColors === 'function') {
+                            loadSmokeColors(smokeColorsData);
+                        }
+                    });
+                </script>
+
+                <h3 style="margin-top: 30px;">Experiment Steps</h3>
                 <div id="steps">
                 <?php foreach ($exp['steps'] as $i => $s): ?>
                 <div class="step-card">

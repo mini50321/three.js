@@ -112,6 +112,20 @@
                     <button type="button" onclick="addReaction()" class="btn btn-secondary">+ Add Reaction</button>
                 </div>
 
+                <h3 style="margin-top: 30px;">Powder/Crystal/Salt Colors</h3>
+                <p style="color: #7f8c8d; font-size: 14px; margin-bottom: 15px;">Configure the visual colors for different powder, crystal, and salt types.</p>
+                <div id="powder-colors"></div>
+                <div style="margin-top: 15px;">
+                    <button type="button" onclick="addPowderColor()" class="btn btn-secondary">+ Add Powder Color</button>
+                </div>
+
+                <h3 style="margin-top: 30px;">Smoke/Gas Colors</h3>
+                <p style="color: #7f8c8d; font-size: 14px; margin-bottom: 15px;">Configure the visual colors for smoke particles emitted by different gas types.</p>
+                <div id="smoke-colors"></div>
+                <div style="margin-top: 15px;">
+                    <button type="button" onclick="addSmokeColor()" class="btn btn-secondary">+ Add Smoke Color</button>
+                </div>
+
                 <h3 style="margin-top: 30px;">Experiment Steps</h3>
                 <div id="steps"></div>
 

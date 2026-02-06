@@ -2911,12 +2911,29 @@ export class ExperimentEngine {
         const beakerTopY = maxYWorld - sizeVec.y * 0.02;
         const spawnY = liquidVolume > 0.001 ? liquidSurfaceY : beakerTopY;
         
+        const gasContents = obj.properties.contents ? 
+            obj.properties.contents.filter(c => this.getChemicalState(c.type) === 'gas' && (c.volume || 0) > 0.001) : [];
+        const firstGas = gasContents.length > 0 ? gasContents[0] : null;
+        const gasType = firstGas ? (firstGas.type || '').toLowerCase() : null;
+        
+        const defaultSmokeColor = 0xcccccc;
+        let smokeColor = defaultSmokeColor;
+        
+        if (gasType && this.config.smokeColors && Array.isArray(this.config.smokeColors)) {
+            const configColor = this.config.smokeColors.find(sc => 
+                (sc.type || '').toLowerCase() === gasType
+            );
+            if (configColor && configColor.color !== undefined) {
+                smokeColor = configColor.color;
+            }
+        }
+        
         for (let i = 0; i < particleCount; i++) {
             const size = 0.008 + Math.random() * 0.012;
             const particle = new THREE.Mesh(
                 new THREE.SphereGeometry(size, 6, 6),
                 new THREE.MeshBasicMaterial({ 
-                    color: 0xcccccc,
+                    color: smokeColor,
                     transparent: true, 
                     opacity: 0.15 + Math.random() * 0.25
                 })
@@ -3953,7 +3970,8 @@ export class ExperimentEngine {
         if (powderContents.length > 0) {
             const firstPowder = powderContents[0];
             const powderType = (firstPowder.type || '').toLowerCase();
-            const powderColorMap = {
+            
+            const defaultPowderColorMap = {
                 'carbonate': 0xffffff,
                 'salt': 0xffffff,
                 'sugar': 0xfff8dc,
@@ -3962,7 +3980,22 @@ export class ExperimentEngine {
                 'calcium': 0xffffff,
                 'sodium': 0xffffff
             };
-            const powderColor = powderColorMap[powderType] || 0xcccccc;
+            
+            let powderColor = 0xcccccc;
+            
+            if (this.config.powderColors && Array.isArray(this.config.powderColors)) {
+                const configColor = this.config.powderColors.find(pc => 
+                    (pc.type || '').toLowerCase() === powderType
+                );
+                if (configColor && configColor.color !== undefined) {
+                    powderColor = configColor.color;
+                } else if (defaultPowderColorMap[powderType] !== undefined) {
+                    powderColor = defaultPowderColorMap[powderType];
+                }
+            } else if (defaultPowderColorMap[powderType] !== undefined) {
+                powderColor = defaultPowderColorMap[powderType];
+            }
+            
             powderMesh.material.color.setHex(powderColor);
         }
     }
