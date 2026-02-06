@@ -156,19 +156,6 @@ export class ScaleController {
                         <span style="font-size: 24px; margin-left: 5px;">g</span>
                     </div>
                 </div>
-                
-                <input type="range" 
-                       id="scale-weight-slider" 
-                       min="0" 
-                       max="${this.maxWeight}" 
-                       step="0.1" 
-                       value="${this.currentWeight}"
-                       style="width: 100%; height: 8px; border-radius: 4px; outline: none; background: rgba(255, 255, 255, 0.3); cursor: pointer;">
-                
-                <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 12px; opacity: 0.8;">
-                    <span>0 g</span>
-                    <span>${this.maxWeight} g</span>
-                </div>
             </div>
             
             <div style="display: flex; gap: 10px;">
@@ -186,15 +173,9 @@ export class ScaleController {
         document.body.appendChild(popup);
         this.scalePopup = popup;
         
-        const slider = popup.querySelector('#scale-weight-slider');
         const display = popup.querySelector('#scale-weight-display');
         const confirmBtn = popup.querySelector('#scale-confirm-btn');
         const closeBtn = popup.querySelector('#scale-close-btn');
-        
-        slider.addEventListener('input', (e) => {
-            this.currentWeight = parseFloat(e.target.value);
-            display.textContent = this.currentWeight.toFixed(1);
-        });
         
         confirmBtn.addEventListener('click', () => {
             this.confirmWeight();
@@ -217,35 +198,6 @@ export class ScaleController {
         closeBtn.addEventListener('mouseleave', () => {
             closeBtn.style.background = 'rgba(255, 255, 255, 0.1)';
         });
-        
-        slider.style.cssText += `
-            -webkit-appearance: none;
-            appearance: none;
-        `;
-        
-        const style = document.createElement('style');
-        style.textContent = `
-            #scale-weight-slider::-webkit-slider-thumb {
-                -webkit-appearance: none;
-                appearance: none;
-                width: 20px;
-                height: 20px;
-                background: white;
-                border-radius: 50%;
-                cursor: pointer;
-                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-            }
-            #scale-weight-slider::-moz-range-thumb {
-                width: 20px;
-                height: 20px;
-                background: white;
-                border-radius: 50%;
-                cursor: pointer;
-                border: none;
-                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-            }
-        `;
-        document.head.appendChild(style);
     }
 
     confirmWeight() {
