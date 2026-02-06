@@ -646,6 +646,42 @@
                     <p id="scale-object-name" style="color: #aaa; font-size: 11px; margin-top: 5px; margin-bottom: 0;"></p>
                 </div>
 
+                <div id="chemical-controls" style="margin-bottom: 15px; display: none;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #fff;">Add Chemical</label>
+                    <select id="chemical-type" style="width: 100%; padding: 8px; background: #444; color: #fff; border: 1px solid #555; border-radius: 4px; margin-bottom: 8px;">
+                        <option value="water">Water</option>
+                        <option value="acid">Acid</option>
+                        <option value="base">Base</option>
+                        <option value="alcohol">Alcohol</option>
+                        <option value="oil">Oil</option>
+                    </select>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" id="chemical-amount" min="0" max="1000" value="50" step="10" placeholder="Amount (ml)" style="flex: 1; padding: 10px; background: #444; color: #fff; border: 1px solid #555; border-radius: 4px; box-sizing: border-box; font-size: 14px;">
+                        <button id="add-chemical-btn" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500;">Add</button>
+                    </div>
+                </div>
+
+                <div id="powder-controls" style="margin-bottom: 15px; display: none;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #fff;">Add Powder</label>
+                    <select id="powder-type" style="width: 100%; padding: 8px; background: #444; color: #fff; border: 1px solid #555; border-radius: 4px; margin-bottom: 8px;">
+                        <option value="carbonate">Carbonate</option>
+                        <option value="salt">Salt</option>
+                        <option value="sugar">Sugar</option>
+                        <option value="copper">Copper Powder</option>
+                        <option value="iron">Iron Powder</option>
+                    </select>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" id="powder-amount" min="0" max="1000" value="10" step="1" placeholder="Mass (g)" style="flex: 1; padding: 10px; background: #444; color: #fff; border: 1px solid #555; border-radius: 4px; box-sizing: border-box; font-size: 14px;">
+                        <button id="add-powder-btn" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500;">Add</button>
+                    </div>
+                </div>
+
+                <div id="reaction-controls" style="margin-bottom: 15px; display: none;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #fff;">Chemical Reaction</label>
+                    <button id="trigger-reaction-btn" style="width: 100%; padding: 10px; background: linear-gradient(135deg, #FF5722 0%, #E64A19 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500;">Check & Trigger Reaction</button>
+                    <p id="reaction-status" style="color: #aaa; font-size: 11px; margin-top: 5px; margin-bottom: 0;"></p>
+                </div>
+
                 <div style="margin-top: 15px; padding: 10px; background: #2a2a2a; border-radius: 6px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                         <span style="color: #aaa; font-size: 13px;">Timer:</span>
@@ -840,13 +876,18 @@
                 const glassRodControls = document.getElementById('glass-rod-controls');
                 const transferToolLabel = document.getElementById('transfer-tool-label');
                 const transferToolHint = document.getElementById('transfer-tool-hint');
+                const chemicalControls = document.getElementById('chemical-controls');
+                const powderControls = document.getElementById('powder-controls');
+                const reactionControls = document.getElementById('reaction-controls');
                 
                 if (obj) {
                     const objName = obj.name.toLowerCase();
                     const isGlassRod = objName.includes('rod') || objName.includes('glass rod') || objName === 'glass rod';
                     const isDropper = objName.includes('dropper');
                     const isTransferTool = isGlassRod || isDropper;
-                    console.log('Object selected:', obj.name, 'isTransferTool:', isTransferTool);
+                    const isContainer = obj.properties.isContainer;
+                    
+                    console.log('Object selected:', obj.name, 'isTransferTool:', isTransferTool, 'isContainer:', isContainer);
                     
                     if (isTransferTool && glassRodControls) {
                         glassRodControls.style.display = 'block';
@@ -862,8 +903,21 @@
                     } else if (glassRodControls) {
                         glassRodControls.style.display = 'none';
                     }
+                    
+                    if (isContainer) {
+                        if (chemicalControls) chemicalControls.style.display = 'block';
+                        if (powderControls) powderControls.style.display = 'block';
+                        if (reactionControls) reactionControls.style.display = 'block';
+                    } else {
+                        if (chemicalControls) chemicalControls.style.display = 'none';
+                        if (powderControls) powderControls.style.display = 'none';
+                        if (reactionControls) reactionControls.style.display = 'none';
+                    }
                 } else {
                     if (glassRodControls) glassRodControls.style.display = 'none';
+                    if (chemicalControls) chemicalControls.style.display = 'none';
+                    if (powderControls) powderControls.style.display = 'none';
+                    if (reactionControls) reactionControls.style.display = 'none';
                 }
             });
 
@@ -946,6 +1000,135 @@
                 
                 volumeInput.addEventListener('change', (e) => {
                     updateBeakerVolume(e.target.value);
+                });
+            }
+
+            const addChemicalBtn = document.getElementById('add-chemical-btn');
+            const chemicalType = document.getElementById('chemical-type');
+            const chemicalAmount = document.getElementById('chemical-amount');
+            
+            if (addChemicalBtn && chemicalType && chemicalAmount) {
+                addChemicalBtn.addEventListener('click', () => {
+                    if (!engine || !engine.selectedObject) {
+                        alert('Please select a container first');
+                        return;
+                    }
+                    
+                    if (!engine.selectedObject.properties.isContainer) {
+                        alert('Selected object is not a container');
+                        return;
+                    }
+                    
+                    const type = chemicalType.value;
+                    const amount = parseFloat(chemicalAmount.value) || 0;
+                    
+                    if (amount <= 0) {
+                        alert('Please enter a valid amount');
+                        return;
+                    }
+                    
+                    if (!engine.selectedObject.properties.contents) {
+                        engine.selectedObject.properties.contents = [];
+                    }
+                    
+                    const existing = engine.selectedObject.properties.contents.find(c => c.type === type);
+                    if (existing) {
+                        existing.volume = (existing.volume || 0) + amount;
+                    } else {
+                        engine.selectedObject.properties.contents.push({ type: type, volume: amount });
+                    }
+                    
+                    engine.selectedObject.properties.volume = engine.calculateVolume(engine.selectedObject);
+                    
+                    if (engine.updateLiquidMesh) {
+                        engine.updateLiquidMesh(engine.selectedObject);
+                    }
+                    if (engine.updateMeasurements) {
+                        engine.updateMeasurements(engine.selectedObject);
+                    }
+                    
+                    console.log(`Added ${amount}ml of ${type} to ${engine.selectedObject.name}`);
+                });
+            }
+
+            const addPowderBtn = document.getElementById('add-powder-btn');
+            const powderType = document.getElementById('powder-type');
+            const powderAmount = document.getElementById('powder-amount');
+            
+            if (addPowderBtn && powderType && powderAmount) {
+                addPowderBtn.addEventListener('click', () => {
+                    if (!engine || !engine.selectedObject) {
+                        alert('Please select a container first');
+                        return;
+                    }
+                    
+                    if (!engine.selectedObject.properties.isContainer) {
+                        alert('Selected object is not a container');
+                        return;
+                    }
+                    
+                    const type = powderType.value;
+                    const mass = parseFloat(powderAmount.value) || 0;
+                    
+                    if (mass <= 0) {
+                        alert('Please enter a valid mass');
+                        return;
+                    }
+                    
+                    if (!engine.selectedObject.properties.contents) {
+                        engine.selectedObject.properties.contents = [];
+                    }
+                    
+                    const existing = engine.selectedObject.properties.contents.find(c => c.type === type && c.mass !== undefined);
+                    if (existing) {
+                        existing.mass = (existing.mass || 0) + mass;
+                    } else {
+                        engine.selectedObject.properties.contents.push({ type: type, mass: mass, volume: 0 });
+                    }
+                    
+                    if (engine.updatePowderMesh) {
+                        engine.updatePowderMesh(engine.selectedObject);
+                    }
+                    if (engine.updateMeasurements) {
+                        engine.updateMeasurements(engine.selectedObject);
+                    }
+                    
+                    console.log(`Added ${mass}g of ${type} powder to ${engine.selectedObject.name}`);
+                });
+            }
+
+            const triggerReactionBtn = document.getElementById('trigger-reaction-btn');
+            const reactionStatus = document.getElementById('reaction-status');
+            
+            if (triggerReactionBtn && reactionStatus) {
+                triggerReactionBtn.addEventListener('click', () => {
+                    if (!engine || !engine.selectedObject) {
+                        alert('Please select a container first');
+                        return;
+                    }
+                    
+                    if (!engine.selectedObject.properties.isContainer) {
+                        alert('Selected object is not a container');
+                        return;
+                    }
+                    
+                    const reaction = engine.checkChemicalReaction(engine.selectedObject);
+                    if (reaction) {
+                        engine.processChemicalReaction(engine.selectedObject, reaction);
+                        reactionStatus.textContent = `Reaction occurred: ${reaction.message || 'Chemical reaction'}`;
+                        reactionStatus.style.color = '#4CAF50';
+                        
+                        setTimeout(() => {
+                            reactionStatus.textContent = '';
+                        }, 5000);
+                    } else {
+                        reactionStatus.textContent = 'No reaction possible with current contents';
+                        reactionStatus.style.color = '#FF9800';
+                        
+                        setTimeout(() => {
+                            reactionStatus.textContent = '';
+                        }, 3000);
+                    }
                 });
             }
 
