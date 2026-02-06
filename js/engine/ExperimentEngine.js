@@ -35,6 +35,12 @@ export class ExperimentEngine {
         this.particleSystems = new Map();
         this.effects = new Map();
         this.liquidMeshes = new Map();
+        this.powderMeshes = new Map();
+        this.gasMeshes = new Map();
+        this.chemicalStates = {
+            solid: ['powder', 'salt', 'sugar', 'copper', 'iron', 'sodium', 'calcium'],
+            gas: ['gas', 'vapor', 'smoke', 'steam', 'co2', 'oxygen', 'hydrogen', 'chlorine']
+        };
         this.measurements = {
             volume: {},
             mass: {},
@@ -2711,11 +2717,85 @@ export class ExperimentEngine {
         return box1.intersectsBox(box2);
     }
 
+    getChemicalState(contentType) {
+        const type = (contentType || '').toLowerCase();
+        if (this.chemicalStates.solid.some(solid => type.includes(solid))) {
+            return 'solid';
+        }
+        if (this.chemicalStates.gas.some(gas => type.includes(gas))) {
+            return 'gas';
+        }
+        return 'liquid';
+    }
+
+    hasGasContent(obj) {
+        if (!obj.properties.contents || obj.properties.contents.length === 0) {
+            return false;
+        }
+        return obj.properties.contents.some(content => {
+            const state = this.getChemicalState(content.type);
+            return state === 'gas';
+        });
+    }
+
+    getGasContent(obj) {
+        if (!obj.properties.contents || obj.properties.contents.length === 0) {
+            return [];
+        }
+        return obj.properties.contents.filter(content => {
+            const state = this.getChemicalState(content.type);
+            return state === 'gas';
+        });
+    }
+
+    processGasEscape(obj) {
+        if (!obj.properties.contents || obj.properties.contents.length === 0) {
+            return;
+        }
+
+        const gasContents = this.getGasContent(obj);
+        if (gasContents.length === 0) {
+            return;
+        }
+
+        const isSealed = obj.properties.isSealed || false;
+        if (isSealed) {
+            return;
+        }
+
+        gasContents.forEach((gasContent, index) => {
+            const escapeRate = 0.1;
+            const escaped = Math.min(gasContent.volume || 0, escapeRate);
+            
+            if (escaped > 0) {
+                gasContent.volume -= escaped;
+                if (gasContent.volume <= 0) {
+                    const contentIndex = obj.properties.contents.indexOf(gasContent);
+                    if (contentIndex !== -1) {
+                        obj.properties.contents.splice(contentIndex, 1);
+                    }
+                }
+                
+                if (!this.effects.has(obj.name + '_smoke')) {
+                    this.createSmokeEffect(obj);
+                }
+            }
+        });
+    }
+
     updateEffects(obj) {
         if (obj.properties.temperature > 100 && !this.effects.has(obj.name + '_boiling')) {
             this.createBoilingEffect(obj);
         }
-        if (obj.properties.temperature > 80 && !this.effects.has(obj.name + '_smoke')) {
+        
+        const hasGas = this.hasGasContent(obj);
+        if (hasGas && !this.effects.has(obj.name + '_smoke')) {
+            this.createSmokeEffect(obj);
+        } else if (!hasGas && this.effects.has(obj.name + '_smoke')) {
+            this.removeSmokeEffect(obj);
+        }
+        
+        if (obj.properties.temperature > 80 && hasGas && !this.effects.has(obj.name + '_smoke')) {
             this.createSmokeEffect(obj);
         }
         
@@ -2727,6 +2807,8 @@ export class ExperimentEngine {
                 this.removeFireEffect(obj);
             }
         }
+        
+        this.processGasEscape(obj);
     }
     
     isFlammable(obj) {
@@ -2853,6 +2935,18 @@ export class ExperimentEngine {
         this.effects.set(obj.name + '_fire', effect);
     }
 
+    removeSmokeEffect(obj) {
+        const effect = this.effects.get(obj.name + '_smoke');
+        if (effect) {
+            effect.particles.forEach(particle => {
+                this.scene.remove(particle);
+                particle.geometry.dispose();
+                particle.material.dispose();
+            });
+            this.effects.delete(obj.name + '_smoke');
+        }
+    }
+
     removeFireEffect(obj) {
         const effect = this.effects.get(obj.name + '_fire');
         if (effect) {
@@ -2967,6 +3061,9 @@ export class ExperimentEngine {
             if (this.updateLiquidMesh) {
                 this.updateLiquidMesh(obj);
             }
+            if (this.updatePowderMesh) {
+                this.updatePowderMesh(obj);
+            }
         }
         
         this.measurements.temperature[obj.name] = obj.properties.temperature;
@@ -2980,8 +3077,16 @@ export class ExperimentEngine {
         
         if (obj.properties.contents && Array.isArray(obj.properties.contents) && obj.properties.contents.length > 0) {
             obj.properties.contents.forEach(content => {
-                if (typeof content === 'object' && content.volume !== undefined) {
-                    totalVolume += content.volume || 0;
+                if (typeof content === 'object') {
+                    const state = this.getChemicalState(content.type);
+                    if (state === 'solid' && content.mass !== undefined) {
+                        const density = 1.5;
+                        totalVolume += (content.mass || 0) / density;
+                    } else if (state === 'gas') {
+                        totalVolume += (content.volume || 0) * 0.1;
+                    } else if (content.volume !== undefined) {
+                        totalVolume += content.volume || 0;
+                    }
                 } else if (typeof content === 'string') {
                     const volume = obj.properties.volume || 0;
                     if (totalVolume === 0) {
@@ -3093,17 +3198,32 @@ export class ExperimentEngine {
         });
         
         if (reaction.result && totalVolume > 0) {
+            const productType = reaction.result.type || 'product';
+            const productState = this.getChemicalState(productType);
+            
             const existingProduct = obj.properties.contents.find(
-                c => (c.type || '').toLowerCase() === (reaction.result.type || '').toLowerCase()
+                c => (c.type || '').toLowerCase() === productType.toLowerCase()
             );
             
             if (existingProduct) {
-                existingProduct.volume += totalVolume;
+                if (productState === 'solid') {
+                    existingProduct.mass = (existingProduct.mass || 0) + (totalVolume * 0.5);
+                } else {
+                    existingProduct.volume += totalVolume;
+                }
             } else {
-                obj.properties.contents.push({
-                    type: reaction.result.type || 'product',
-                    volume: totalVolume
-                });
+                const newProduct = {
+                    type: productType,
+                    volume: productState === 'solid' ? 0 : totalVolume,
+                    mass: productState === 'solid' ? (totalVolume * 0.5) : undefined
+                };
+                obj.properties.contents.push(newProduct);
+            }
+            
+            if (productState === 'gas') {
+                if (!this.effects.has(obj.name + '_smoke')) {
+                    this.createSmokeEffect(obj);
+                }
             }
         }
         
@@ -3120,6 +3240,16 @@ export class ExperimentEngine {
         if (this.updateLiquidMesh) {
             this.updateLiquidMesh(obj);
         }
+        
+        if (this.updatePowderMesh) {
+            this.updatePowderMesh(obj);
+        }
+        
+        if (this.updateEffects) {
+            this.updateEffects(obj);
+        }
+        
+        this.updateMeasurements(obj);
     }
 
     getReactionRules() {
@@ -3167,6 +3297,22 @@ export class ExperimentEngine {
                 reactants: ['litmus', 'base'],
                 result: { type: 'blue_solution', color: 0x0000ff },
                 message: 'Litmus turns blue in base'
+            },
+            {
+                reactants: ['acid', 'carbonate'],
+                result: { type: 'co2', color: 0xcccccc },
+                message: 'Acid reacts with carbonate to produce carbon dioxide gas'
+            },
+            {
+                reactants: ['acid', 'metal'],
+                result: { type: 'hydrogen', color: 0xffffff },
+                message: 'Acid reacts with metal to produce hydrogen gas'
+            },
+            {
+                reactants: ['water', 'temperature'],
+                result: { type: 'steam', color: 0xeeeeee },
+                message: 'Water heated to produce steam',
+                minTemperature: 100
             }
         ];
     }
@@ -3400,8 +3546,11 @@ export class ExperimentEngine {
     updateLiquidMesh(obj) {
         if (!obj.properties.isContainer) return;
         
-        const volume = this.calculateVolume(obj);
-        const hasContents = obj.properties.contents && obj.properties.contents.length > 0 && obj.properties.contents.some(c => c.volume > 0.001);
+        const liquidContents = obj.properties.contents ? 
+            obj.properties.contents.filter(c => this.getChemicalState(c.type) === 'liquid' && (c.volume || 0) > 0.001) : [];
+        
+        const volume = liquidContents.reduce((sum, c) => sum + (c.volume || 0), 0);
+        const hasContents = liquidContents.length > 0;
         const liquidHeight = this.calculateLiquidHeight(obj, volume);
         
         const liquidMesh = this.liquidMeshes.get(obj.name);
@@ -3473,6 +3622,84 @@ export class ExperimentEngine {
         
         liquidMesh.rotation.copy(obj.mesh.rotation);
         liquidMesh.renderOrder = 1;
+    }
+
+    updatePowderMesh(obj) {
+        if (!obj.properties.isContainer) return;
+        
+        const powderContents = obj.properties.contents ? 
+            obj.properties.contents.filter(c => this.getChemicalState(c.type) === 'solid' && (c.mass || 0) > 0.001) : [];
+        
+        if (powderContents.length === 0) {
+            const existingPowder = this.powderMeshes.get(obj.name);
+            if (existingPowder) {
+                this.scene.remove(existingPowder);
+                existingPowder.geometry.dispose();
+                existingPowder.material.dispose();
+                this.powderMeshes.delete(obj.name);
+            }
+            return;
+        }
+        
+        obj.mesh.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(obj.mesh);
+        if (!box || box.isEmpty()) return;
+        
+        const size = box.getSize(new THREE.Vector3());
+        const minYWorld = box.min.y;
+        const containerCenter = box.getCenter(new THREE.Vector3());
+        
+        let totalMass = 0;
+        powderContents.forEach(content => {
+            totalMass += content.mass || 0;
+        });
+        
+        const density = 1.5;
+        const powderVolume = totalMass / density;
+        const capacity = obj.properties.capacity || 1000;
+        const fillRatio = Math.min(powderVolume / capacity, 1);
+        const powderHeight = size.y * fillRatio * 0.85;
+        
+        if (powderHeight <= 0) return;
+        
+        const objName = obj.name.toLowerCase();
+        const isCylinder = objName.includes('cylinder') || objName.includes('graduated');
+        const radius = isCylinder ? Math.min(size.x, size.z) * 0.2 : Math.min(size.x, size.z) * 0.45;
+        
+        let powderMesh = this.powderMeshes.get(obj.name);
+        
+        if (!powderMesh) {
+            const segments = this.performanceManager.getGeometrySegments();
+            const geometry = new THREE.CylinderGeometry(radius, radius, powderHeight, segments);
+            const material = new THREE.MeshStandardMaterial({
+                color: 0xcccccc,
+                transparent: true,
+                opacity: 0.9,
+                roughness: 0.8,
+                metalness: 0.1
+            });
+            powderMesh = new THREE.Mesh(geometry, material);
+            this.powderMeshes.set(obj.name, powderMesh);
+            this.scene.add(powderMesh);
+        } else {
+            if (Math.abs(powderMesh.geometry.parameters.height - powderHeight) > 0.01) {
+                powderMesh.geometry.dispose();
+                const segments = this.performanceManager.getGeometrySegments();
+                powderMesh.geometry = new THREE.CylinderGeometry(radius, radius, powderHeight, segments);
+            }
+        }
+        
+        const powderBottom = minYWorld + (size.y * 0.05);
+        const powderCenterY = powderBottom + powderHeight / 2;
+        powderMesh.position.set(containerCenter.x, powderCenterY, containerCenter.z);
+        powderMesh.rotation.copy(obj.mesh.rotation);
+        powderMesh.renderOrder = 1;
+        
+        if (powderContents.length > 0) {
+            const firstPowder = powderContents[0];
+            const powderColor = this.getLiquidColor(obj);
+            powderMesh.material.color.copy(powderColor);
+        }
     }
 
     onMouseDown(event) {
