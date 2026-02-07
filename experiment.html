@@ -65,6 +65,46 @@
             box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
         }
 
+        #zoom-controls {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 1000;
+        }
+
+        #zoom-in-btn, #zoom-out-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(30, 27, 75, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            color: #fff;
+            font-size: 20px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            padding: 0;
+            line-height: 1;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        #zoom-in-btn:hover, #zoom-out-btn:hover {
+            background: rgba(40, 37, 85, 0.95);
+            border-color: rgba(255, 255, 255, 0.4);
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        #zoom-in-btn:active, #zoom-out-btn:active {
+            transform: translateY(0) scale(0.95);
+        }
+
         #help-popup {
             display: none;
             position: absolute;
@@ -838,6 +878,10 @@
     <div id="container">
         <div id="canvas-container">
             <button id="help-button">?</button>
+            <div id="zoom-controls">
+                <button id="zoom-in-btn" title="Zoom In">+</button>
+                <button id="zoom-out-btn" title="Zoom Out">−</button>
+            </div>
             <div id="help-popup">
                 <button class="close-button" id="help-close">×</button>
                 <h3>Keyboard Controls</h3>
@@ -2414,6 +2458,33 @@
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape' && helpPopup.classList.contains('show')) {
                     helpPopup.classList.remove('show');
+                }
+            });
+        }
+
+        const zoomInBtn = document.getElementById('zoom-in-btn');
+        const zoomOutBtn = document.getElementById('zoom-out-btn');
+
+        if (zoomInBtn && zoomOutBtn) {
+            zoomInBtn.addEventListener('click', () => {
+                if (engine && engine.controls) {
+                    const currentDistance = engine.camera.position.distanceTo(engine.controls.target);
+                    const newDistance = Math.max(
+                        engine.controls.minDistance,
+                        currentDistance * 0.8
+                    );
+                    engine.targetZoomDistance = newDistance;
+                }
+            });
+
+            zoomOutBtn.addEventListener('click', () => {
+                if (engine && engine.controls) {
+                    const currentDistance = engine.camera.position.distanceTo(engine.controls.target);
+                    const newDistance = Math.min(
+                        engine.controls.maxDistance,
+                        currentDistance * 1.25
+                    );
+                    engine.targetZoomDistance = newDistance;
                 }
             });
         }
