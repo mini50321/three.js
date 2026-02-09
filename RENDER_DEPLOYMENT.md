@@ -20,12 +20,12 @@ Static Sites are for frontend-only apps. Your app needs PHP backend, so use Web 
 Use these settings:
 
 - **Name:** `virtual-lab` (or any name you prefer)
-- **Environment:** `PHP`
+- **Language:** `Docker` (since PHP is not directly available, we'll use Docker)
 - **Region:** Choose closest to your users
 - **Branch:** `main` (or `master`)
 - **Root Directory:** Leave empty (or `./` if your files are in a subfolder)
-- **Build Command:** Leave empty (PHP doesn't need building)
-- **Start Command:** `php -S 0.0.0.0:$PORT router.php`
+- **Build Command:** Leave empty (Docker will build automatically)
+- **Start Command:** Leave empty (Docker will start automatically)
 
 ### Step 4: Environment Variables
 
