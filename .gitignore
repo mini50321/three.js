@@ -1,36 +1,32 @@
-# PHP
-*.log
-*.cache
-.htaccess
+# Database files
+data/experiments.db
+data/experiments.db-journal
+data/*.db
+data/*.db-journal
 
-# OS
+# Uploads
+uploads/models/*
+!uploads/models/.gitkeep
+
+# OS files
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# IDE
+# IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# Temporary files
-*.tmp
-*.temp
-*.bak
-
-# Uploads (if you want to exclude uploaded files)
-# lab/admin/uploads/
+# Logs
+*.log
 
 # Environment files
 .env
 .env.local
 
-# Node modules (if any)
-node_modules/
-package-lock.json
-
-# Large model files (optional - uncomment if models are too large for Git)
-# lab/assets/models/*.glb
-
+# Temporary files
+*.tmp
+*.temp

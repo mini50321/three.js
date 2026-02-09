@@ -1,11 +1,12 @@
 <?php
-define('DB_TYPE', 'sqlite');
-define('DB_SQLITE_PATH', __DIR__ . '/../../data/experiments.db');
+// Support environment variables (for Render.com, Heroku, etc.)
+define('DB_TYPE', getenv('DB_TYPE') ?: 'sqlite');
+define('DB_SQLITE_PATH', getenv('DB_SQLITE_PATH') ?: __DIR__ . '/../../data/experiments.db');
 
-define('DB_MYSQL_HOST', 'localhost');
-define('DB_MYSQL_DBNAME', 'virtual_lab');
-define('DB_MYSQL_USER', 'root');
-define('DB_MYSQL_PASS', '');
+define('DB_MYSQL_HOST', getenv('DB_MYSQL_HOST') ?: 'localhost');
+define('DB_MYSQL_DBNAME', getenv('DB_MYSQL_DBNAME') ?: 'virtual_lab');
+define('DB_MYSQL_USER', getenv('DB_MYSQL_USER') ?: 'root');
+define('DB_MYSQL_PASS', getenv('DB_MYSQL_PASS') ?: '');
 
 function getDBConnection() {
     try {

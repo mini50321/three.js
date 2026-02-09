@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: virtual-lab
+    runtime: php
+    buildCommand: ""
+    startCommand: php -S 0.0.0.0:$PORT router.php
+    envVars:
+      - key: PHP_VERSION
+        value: 8.1
+      - key: DB_TYPE
+        value: sqlite
+      - key: DB_SQLITE_PATH
+        value: /opt/render/project/src/data/experiments.db
+    disk:
+      name: virtual-lab-disk
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
+
