@@ -3733,8 +3733,33 @@ export class ExperimentEngine {
             'indicator': 0xffeb3b,
             'indicator_solution': 0xffeb3b,
             'yellow_solution': 0xffeb3b,
+            'yellow_chemical': 0xffff00,
+            'yellowchemical': 0xffff00,
             'heated_indicator': 0xff9800,
             'acidic_solution': 0xe91e63
+        };
+        
+        // Check if any initial state has this content type with a color
+        const getColorFromInitialState = (contentType) => {
+            if (!this.config.initialState || !Array.isArray(this.config.initialState)) {
+                return null;
+            }
+            const lowerType = contentType.toLowerCase();
+            for (const state of this.config.initialState) {
+                if (!state.contents || !state.initialColor) continue;
+                const stateContents = Array.isArray(state.contents) 
+                    ? state.contents 
+                    : (typeof state.contents === 'string' ? state.contents.split(',').map(s => s.trim()) : []);
+                const hasMatchingContent = stateContents.some(sc => {
+                    const scLower = (sc || '').toLowerCase().trim();
+                    return scLower === lowerType || scLower.includes(lowerType) || lowerType.includes(scLower);
+                });
+                if (hasMatchingContent) {
+                    const colorStr = state.initialColor.startsWith('#') ? state.initialColor : '#' + state.initialColor;
+                    return new THREE.Color(colorStr);
+                }
+            }
+            return null;
         };
         
         const getInitialStateForObject = (objectName) => {
@@ -3768,13 +3793,19 @@ export class ExperimentEngine {
                 const colorStr = initialState.initialColor.startsWith('#') ? initialState.initialColor : '#' + initialState.initialColor;
                 baseColor = new THREE.Color(colorStr);
             } else {
-                const reactionForContent = reactions.find(r => 
-                    r.result && (r.result.type || '').toLowerCase() === contentType
-                );
-                if (reactionForContent && reactionForContent.result && reactionForContent.result.color !== undefined) {
-                    baseColor = new THREE.Color(reactionForContent.result.color);
+                // First, try to get color from any initial state that has this content type
+                const initialStateColor = getColorFromInitialState(contentType);
+                if (initialStateColor) {
+                    baseColor = initialStateColor;
                 } else {
-                    baseColor = new THREE.Color(colorMap[contentType] || colorMap['water']);
+                    const reactionForContent = reactions.find(r => 
+                        r.result && (r.result.type || '').toLowerCase() === contentType
+                    );
+                    if (reactionForContent && reactionForContent.result && reactionForContent.result.color !== undefined) {
+                        baseColor = new THREE.Color(reactionForContent.result.color);
+                    } else {
+                        baseColor = new THREE.Color(colorMap[contentType] || colorMap['water']);
+                    }
                 }
             }
         } else {
@@ -3798,14 +3829,20 @@ export class ExperimentEngine {
                     const vol = content.volume || 0;
                     totalVolume += vol;
                     const type = (content.type || 'water').toLowerCase();
-                    const reactionForContent = reactions.find(r => 
-                        r.result && (r.result.type || '').toLowerCase() === type
-                    );
                     let color;
-                    if (reactionForContent && reactionForContent.result && reactionForContent.result.color !== undefined) {
-                        color = new THREE.Color(reactionForContent.result.color);
+                    
+                    const initialStateColor = getColorFromInitialState(type);
+                    if (initialStateColor) {
+                        color = initialStateColor;
                     } else {
-                        color = new THREE.Color(colorMap[type] || colorMap['water']);
+                        const reactionForContent = reactions.find(r => 
+                            r.result && (r.result.type || '').toLowerCase() === type
+                        );
+                        if (reactionForContent && reactionForContent.result && reactionForContent.result.color !== undefined) {
+                            color = new THREE.Color(reactionForContent.result.color);
+                        } else {
+                            color = new THREE.Color(colorMap[type] || colorMap['water']);
+                        }
                     }
                     r += color.r * vol;
                     g += color.g * vol;
