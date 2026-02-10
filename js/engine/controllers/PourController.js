@@ -120,10 +120,12 @@ export class PourController {
                         existing.volume += transferVolume;
                     }
                     
-                    if (this.engine.checkChemicalReaction) {
-                        const reaction = this.engine.checkChemicalReaction(this.targetObject);
-                        if (reaction) {
-                            this.engine.processChemicalReaction(this.targetObject, reaction);
+                    if (this.engine.checkChemicalReaction && this.engine.canReactionProceed) {
+                        if (this.engine.canReactionProceed(this.targetObject)) {
+                            const reaction = this.engine.checkChemicalReaction(this.targetObject);
+                            if (reaction) {
+                                this.engine.processChemicalReaction(this.targetObject, reaction);
+                            }
                         }
                     }
                 }

@@ -88,6 +88,10 @@ export class TiltController {
             const tiltAngle = Math.abs(tiltX) + Math.abs(tiltZ);
             
             if (hasContents) {
+                if (this.engine.isSwirling && this.engine.selectedObject === this.activeObject) {
+                    return;
+                }
+                
                 const tiltThreshold = 0.001;
                 if (tiltAngle > tiltThreshold) {
                     const isDismissed = this.dismissedObjects.has(this.activeObject);
@@ -349,10 +353,12 @@ export class TiltController {
                 });
             }
             
-            if (this.engine.checkChemicalReaction) {
-                const reaction = this.engine.checkChemicalReaction(this.pendingPourTarget);
-                if (reaction) {
-                    this.engine.processChemicalReaction(this.pendingPourTarget, reaction);
+            if (this.engine.checkChemicalReaction && this.engine.canReactionProceed) {
+                if (this.engine.canReactionProceed(this.pendingPourTarget)) {
+                    const reaction = this.engine.checkChemicalReaction(this.pendingPourTarget);
+                    if (reaction) {
+                        this.engine.processChemicalReaction(this.pendingPourTarget, reaction);
+                    }
                 }
             }
             

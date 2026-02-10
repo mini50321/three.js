@@ -58,6 +58,9 @@ export class ExperimentEngine {
         this.stepHistory = [];
         this.isRunning = false;
         this.initialState = null;
+        this.reactionReadyContainers = new Set(); 
+        this.completedSteps = new Set();
+        this.reactionBlockedLogs = new Map();
         this.performanceManager = new PerformanceManager();
         this.physicsManager = new PhysicsManager();
         this.lastUpdateTime = 0;
@@ -1785,24 +1788,26 @@ export class ExperimentEngine {
                 this.updateEffects(obj);
                 
                 if (obj.properties.isContainer && obj.properties.contents && obj.properties.contents.length > 0) {
-                    const reaction = this.checkChemicalReaction(obj);
-                    if (reaction) {
-                        const hasReactants = obj.properties.contents.some(c => {
-                            const type = (c.type || '').toLowerCase();
-                            return reaction.reactants.some(r => {
-                                const reactantType = r.toLowerCase();
-                                const state = this.getChemicalState(c.type);
-                                if (state === 'solid' && c.mass !== undefined) {
-                                    return type.includes(reactantType) && c.mass > 0.001;
-                                } else if (state === 'liquid' && c.volume !== undefined) {
-                                    return type.includes(reactantType) && c.volume > 0.001;
-                                }
-                                return false;
+                    if (this.canReactionProceed(obj)) {
+                        const reaction = this.checkChemicalReaction(obj);
+                        if (reaction) {
+                            const hasReactants = obj.properties.contents.some(c => {
+                                const type = (c.type || '').toLowerCase();
+                                return reaction.reactants.some(r => {
+                                    const reactantType = r.toLowerCase();
+                                    const state = this.getChemicalState(c.type);
+                                    if (state === 'solid' && c.mass !== undefined) {
+                                        return type.includes(reactantType) && c.mass > 0.001;
+                                    } else if (state === 'liquid' && c.volume !== undefined) {
+                                        return type.includes(reactantType) && c.volume > 0.001;
+                                    }
+                                    return false;
+                                });
                             });
-                        });
-                        
-                        if (hasReactants && this.updateThrottleCounter % 30 === 0) {
-                            this.processChemicalReaction(obj, reaction);
+                            
+                            if (hasReactants && this.updateThrottleCounter % 30 === 0) {
+                                this.processChemicalReaction(obj, reaction);
+                            }
                         }
                     }
                 }
@@ -1969,9 +1974,11 @@ export class ExperimentEngine {
                         }
                     }
                     
-                    const reaction = this.checkChemicalReaction(obj);
-                    if (reaction) {
-                        this.processChemicalReaction(obj, reaction);
+                    if (this.canReactionProceed(obj)) {
+                        const reaction = this.checkChemicalReaction(obj);
+                        if (reaction) {
+                            this.processChemicalReaction(obj, reaction);
+                        }
                     }
                 }
                 
@@ -2039,6 +2046,10 @@ export class ExperimentEngine {
         for (const [name, obj] of this.objects) {
             if (!obj.properties.isContainer) continue;
             
+            if (this.isSwirling && this.selectedObject === obj) {
+                continue;
+            }
+            
             const hasContents = (obj.properties.contents && 
                                 obj.properties.contents.length > 0) ||
                                (obj.properties.volume > 0);
@@ -2052,13 +2063,10 @@ export class ExperimentEngine {
             if (tiltController.dismissedObjects && tiltController.dismissedObjects.has(obj)) {
                 if (tiltAngle < 0.005) {
                     tiltController.dismissedObjects.delete(obj);
-                    console.log('[Pour Detection] Object untilted, removed from dismissedObjects:', obj.name);
                     if (tiltController.dismissedObjects.size === 0) {
                         tiltController.hasShownModal = false;
                         tiltController.modalJustClosed = false;
                     }
-                } else {
-                    console.log('[Pour Detection] Skipping dismissed object:', obj.name, 'tiltAngle:', tiltAngle.toFixed(4));
                 }
                 continue;
             }
@@ -2279,7 +2287,17 @@ export class ExperimentEngine {
                 if (currentTime - nearbyContainer.lastStirTime > 500) {
                     nearbyContainer.properties.stirCount = (nearbyContainer.properties.stirCount || 0) + 1;
                     nearbyContainer.lastStirTime = currentTime;
+                    this.markReactionReady(nearbyContainer);
                 }
+            }
+        } else if (obj.properties.isContainer) {
+            const currentTime = performance.now();
+            if (!obj.lastShakeTime) {
+                obj.lastShakeTime = currentTime;
+            }
+            if (currentTime - obj.lastShakeTime > 1000) {
+                obj.lastShakeTime = currentTime;
+                this.markReactionReady(obj);
             }
         }
         
@@ -3453,6 +3471,10 @@ export class ExperimentEngine {
             return null;
         }
         
+        if (!this.canReactionProceed(obj)) {
+            return null;
+        }
+        
         const reactions = this.getReactionRules();
         const contentTypes = obj.properties.contents.map(c => (c.type || '').toLowerCase());
         const temp = obj.properties.temperature || 20;
@@ -3476,6 +3498,86 @@ export class ExperimentEngine {
         }
         
         return null;
+    }
+    
+    canReactionProceed(obj) {
+        if (!this.config.steps || !Array.isArray(this.config.steps) || this.config.steps.length === 0) {
+            return true;
+        }
+        
+        const objName = obj.name.toLowerCase().trim();
+        let hasStirStep = false;
+        let stirStepIndex = -1;
+        let hasMixingStep = false;
+        let mixingStepIndex = -1;
+        
+        for (let i = 0; i < this.config.steps.length; i++) {
+            const step = this.config.steps[i];
+            const action = (step.action || '').toLowerCase().trim();
+            const equipment = (step.equipment || '').toLowerCase().trim();
+            
+            const equipmentWords = equipment.split(/\s+/);
+            const objWords = objName.split(/\s+/);
+            const isForThisContainer = 
+                objName === equipment ||
+                objName.includes(equipment) || 
+                equipment.includes(objName) ||
+                equipment.includes(objWords[0]) ||
+                objName.includes(equipmentWords[0]) ||
+                (equipmentWords.length > 0 && objWords.some(w => equipmentWords.includes(w))) ||
+                (objWords.length > 0 && equipmentWords.some(w => objWords.includes(w)));
+            
+            if (isForThisContainer) {
+                if (action === 'stir' || action === 'shake') {
+                    hasStirStep = true;
+                    if (stirStepIndex === -1) stirStepIndex = i; 
+                } else if (action === 'pour' || action === 'drag') {
+                    hasMixingStep = true;
+                    if (mixingStepIndex === -1 || i > mixingStepIndex) {
+                        mixingStepIndex = i; 
+                    }
+                }
+            }
+        }
+        
+        if (hasStirStep && hasMixingStep && stirStepIndex > mixingStepIndex) {
+            const canProceed = this.completedSteps.has(stirStepIndex) || this.reactionReadyContainers.has(obj.name);
+            if (!canProceed) {
+                const lastLogTime = this.reactionBlockedLogs.get(obj.name) || 0;
+                const now = Date.now();
+                if (now - lastLogTime > 5000) {
+                    console.log(`[Reaction Blocked] Container ${obj.name} needs stirring (step ${stirStepIndex + 1}) before reaction can occur`);
+                    this.reactionBlockedLogs.set(obj.name, now);
+                }
+            } else {
+                this.reactionBlockedLogs.delete(obj.name);
+            }
+            return canProceed;
+        }
+        
+        if (hasStirStep) {
+            const canProceed = this.completedSteps.has(stirStepIndex) || this.reactionReadyContainers.has(obj.name);
+            if (!canProceed) {
+                const lastLogTime = this.reactionBlockedLogs.get(obj.name) || 0;
+                const now = Date.now();
+                if (now - lastLogTime > 5000) {
+                    console.log(`[Reaction Blocked] Container ${obj.name} needs stirring (step ${stirStepIndex + 1}) before reaction can occur`);
+                    this.reactionBlockedLogs.set(obj.name, now);
+                }
+            } else {
+                this.reactionBlockedLogs.delete(obj.name);
+            }
+            return canProceed;
+        }
+        
+        return true;
+    }
+    
+    markReactionReady(obj) {
+        if (obj && obj.name) {
+            this.reactionReadyContainers.add(obj.name);
+            console.log(`[Reaction] Container ${obj.name} is now ready for reactions after stirring/shaking`);
+        }
     }
 
     processChemicalReaction(obj, reaction) {
@@ -3705,11 +3807,20 @@ export class ExperimentEngine {
         }
         
         const tempObj = { ...obj, properties: { ...obj.properties, contents: liquidContents } };
-        const reaction = this.checkChemicalReaction(tempObj);
-        if (reaction) {
-            const resultState = this.getChemicalState(reaction.result.type);
-            if (resultState === 'liquid') {
-                return new THREE.Color(reaction.result.color);
+        if (this.canReactionProceed && this.canReactionProceed(tempObj)) {
+            const reaction = this.checkChemicalReaction(tempObj);
+            if (reaction) {
+                const resultState = this.getChemicalState(reaction.result.type);
+                if (resultState === 'liquid') {
+                    const hasReactedProduct = liquidContents.some(c => {
+                        const type = (c.type || '').toLowerCase();
+                        const resultType = (reaction.result.type || '').toLowerCase();
+                        return type === resultType || type.includes(resultType);
+                    });
+                    if (hasReactedProduct) {
+                        return new THREE.Color(reaction.result.color);
+                    }
+                }
             }
         }
         
@@ -3810,18 +3921,39 @@ export class ExperimentEngine {
             }
         } else {
             const contentTypes = contents.map(c => (c.type || '').toLowerCase());
-            const reactionForMixed = reactions.find(r => {
-                if (!r.result || !r.reactants) return false;
-                const reactants = r.reactants.map(react => react.toLowerCase());
-                const hasAllReactants = reactants.every(reactant => 
-                    contentTypes.some(type => type === reactant || type.includes(reactant))
-                );
-                return hasAllReactants;
+            const hasReactionProduct = contentTypes.some(type => {
+                return reactions.some(r => {
+                    if (!r.result) return false;
+                    const resultType = (r.result.type || '').toLowerCase();
+                    return type === resultType || type.includes(resultType);
+                });
             });
             
-            if (reactionForMixed && reactionForMixed.result && reactionForMixed.result.color !== undefined) {
-                baseColor = new THREE.Color(reactionForMixed.result.color);
-            } else {
+            if (hasReactionProduct) {
+                const reactionProduct = contents.find(c => {
+                    const type = (c.type || '').toLowerCase();
+                    return reactions.some(r => {
+                        if (!r.result) return false;
+                        const resultType = (r.result.type || '').toLowerCase();
+                        return type === resultType || type.includes(resultType);
+                    });
+                });
+                
+                if (reactionProduct) {
+                    const productType = (reactionProduct.type || '').toLowerCase();
+                    const reactionForProduct = reactions.find(r => {
+                        if (!r.result) return false;
+                        const resultType = (r.result.type || '').toLowerCase();
+                        return resultType === productType || resultType.includes(productType);
+                    });
+                    
+                    if (reactionForProduct && reactionForProduct.result && reactionForProduct.result.color !== undefined) {
+                        baseColor = new THREE.Color(reactionForProduct.result.color);
+                    }
+                }
+            }
+            
+            if (!hasReactionProduct) {
                 let r = 0, g = 0, b = 0;
                 let totalVolume = 0;
                 
@@ -4681,6 +4813,21 @@ export class ExperimentEngine {
         const validation = this.checkStepConditions(step);
         
         if (validation.valid) {
+            this.completedSteps.add(stepIndex);
+            
+            const action = (step.action || '').toLowerCase();
+            if (action === 'stir' || action === 'shake') {
+                const equipment = (step.equipment || '').toLowerCase();
+                for (const [name, obj] of this.objects) {
+                    const objName = name.toLowerCase();
+                    if (obj.properties.isContainer && 
+                        (objName.includes(equipment) || equipment.includes(objName.split(' ')[0]))) {
+                        this.markReactionReady(obj);
+                        break;
+                    }
+                }
+            }
+            
             this.currentStep++;
             this.score += validation.points || 0;
             this.stepHistory.push({
@@ -5344,16 +5491,18 @@ export class ExperimentEngine {
                     }
                 }
                 
-                if (this.checkChemicalReaction) {
-                    const reaction = this.checkChemicalReaction(nearbyContainer);
-                    if (reaction) {
-                        console.log('[Glass Rod] Found reaction:', reaction.result?.type, 'Color:', reaction.result?.color);
-                        this.processChemicalReaction(nearbyContainer, reaction);
-                        const afterContentTypes = nearbyContainer.properties.contents.map(c => (c.type || '').toLowerCase());
-                        console.log('[Glass Rod] Beaker contents after reaction:', afterContentTypes);
-                    } else {
-                        const currentContentTypes = nearbyContainer.properties.contents.map(c => (c.type || '').toLowerCase());
-                        console.log('[Glass Rod] No reaction found for contents:', currentContentTypes);
+                if (this.checkChemicalReaction && this.canReactionProceed) {
+                    if (this.canReactionProceed(nearbyContainer)) {
+                        const reaction = this.checkChemicalReaction(nearbyContainer);
+                        if (reaction) {
+                            console.log('[Glass Rod] Found reaction:', reaction.result?.type, 'Color:', reaction.result?.color);
+                            this.processChemicalReaction(nearbyContainer, reaction);
+                            const afterContentTypes = nearbyContainer.properties.contents.map(c => (c.type || '').toLowerCase());
+                            console.log('[Glass Rod] Beaker contents after reaction:', afterContentTypes);
+                        } else {
+                            const currentContentTypes = nearbyContainer.properties.contents.map(c => (c.type || '').toLowerCase());
+                            console.log('[Glass Rod] No reaction found for contents:', currentContentTypes);
+                        }
                     }
                 }
             }

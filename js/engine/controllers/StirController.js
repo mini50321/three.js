@@ -62,6 +62,12 @@ export class StirController {
         if (this.activeObject) {
             this.activeObject.properties.stirCount = this.stirCount;
             
+            if (this.stirCount > 0 && this.activeObject.properties.isContainer) {
+                if (this.engine.markReactionReady) {
+                    this.engine.markReactionReady(this.activeObject);
+                }
+            }
+            
             if (this.activeObject.originalRotation) {
                 this.activeObject.mesh.rotation.x = this.activeObject.originalRotation.x;
                 this.activeObject.mesh.rotation.z = this.activeObject.originalRotation.z;
