@@ -2783,30 +2783,73 @@ export class ExperimentEngine {
         const burnerCenter = burnerBox.getCenter(new THREE.Vector3());
         const burnerTop = burnerBox.max.y;
         
+        // First, position X and Z to center on burner stand
         obj.mesh.position.x = burnerCenter.x;
         obj.mesh.position.z = burnerCenter.z;
         obj.mesh.updateMatrixWorld(true);
         
+        // Recalculate burner box after any potential updates
+        const updatedBurnerBox = new THREE.Box3().setFromObject(burnerMesh);
+        const updatedBurnerCenter = updatedBurnerBox.getCenter(new THREE.Vector3());
+        const updatedBurnerTop = updatedBurnerBox.max.y;
+        
+        // Ensure we're using the most up-to-date center
+        obj.mesh.position.x = updatedBurnerCenter.x;
+        obj.mesh.position.z = updatedBurnerCenter.z;
+        obj.mesh.updateMatrixWorld(true);
+        
+        // Now get the object's bounding box after X/Z positioning
         const objBox = new THREE.Box3().setFromObject(obj.mesh);
+        const objCenter = objBox.getCenter(new THREE.Vector3());
         const objBottom = objBox.min.y;
-        const currentPositionY = obj.mesh.position.y;
         
-        const offsetFromPivotToBottom = currentPositionY - objBottom;
-        const targetY = burnerTop + offsetFromPivotToBottom;
+        console.log('Burner center:', updatedBurnerCenter, 'Burner top:', updatedBurnerTop);
+        console.log('Object center after X/Z positioning:', objCenter, 'Object bottom:', objBottom);
         
-        console.log('Moving object to burner top - center:', burnerCenter, 'top:', burnerTop);
-        console.log('Object bottom:', objBottom, 'Current pivot position:', currentPositionY);
-        console.log('Offset from pivot to bottom:', offsetFromPivotToBottom, 'Target Y:', targetY);
+        // Calculate how much we need to move the object vertically so that its bottom
+        // exactly touches the top of the burner stand
+        const deltaY = updatedBurnerTop - objBottom;
+        const targetY = objCenter.y + deltaY;
+        
+        console.log('Burner top:', updatedBurnerTop, 'Object bottom before:', objBottom, 'deltaY:', deltaY, 'targetY:', targetY);
         
         obj.mesh.position.y = targetY;
         obj.mesh.updateMatrixWorld(true);
         
+        // Verify the placement is exact
+        const finalBurnerBox = new THREE.Box3().setFromObject(burnerMesh);
+        const finalBurnerTop = finalBurnerBox.max.y;
+        const finalBurnerCenter = finalBurnerBox.getCenter(new THREE.Vector3());
+        
         const verifyBox = new THREE.Box3().setFromObject(obj.mesh);
         const verifyBottom = verifyBox.min.y;
-        console.log('After placement - Object bottom:', verifyBottom, 'Burner top:', burnerTop, 'Difference:', (verifyBottom - burnerTop).toFixed(4));
+        const verifyCenter = verifyBox.getCenter(new THREE.Vector3());
+        const difference = verifyBottom - finalBurnerTop;
+        
+        const horizontalDistance = Math.sqrt(
+            Math.pow(verifyCenter.x - finalBurnerCenter.x, 2) + 
+            Math.pow(verifyCenter.z - finalBurnerCenter.z, 2)
+        );
+        
+        console.log('After placement - Object bottom:', verifyBottom, 'Burner top:', finalBurnerTop, 'Vertical difference:', difference.toFixed(6));
+        console.log('Object center:', verifyCenter, 'Burner center:', finalBurnerCenter, 'Horizontal distance:', horizontalDistance.toFixed(6));
+        
+        // If there's still a gap, adjust slightly to eliminate it
+        if (Math.abs(difference) > 0.0001) {
+            const correction = finalBurnerTop - verifyBottom;
+            obj.mesh.position.y += correction;
+            obj.mesh.updateMatrixWorld(true);
+            const finalBox = new THREE.Box3().setFromObject(obj.mesh);
+            const finalBottom = finalBox.min.y;
+            const finalBurnerBoxAfter = new THREE.Box3().setFromObject(burnerMesh);
+            const finalBurnerTopAfter = finalBurnerBoxAfter.max.y;
+            console.log('Applied correction:', correction, 'Final bottom:', finalBottom, 'Final difference:', (finalBottom - finalBurnerTopAfter).toFixed(6));
+        }
         
         if (obj.physicsBody && this.physicsManager) {
-            const newCenter = new THREE.Vector3(burnerCenter.x, targetY, burnerCenter.z);
+            const finalObjBox = new THREE.Box3().setFromObject(obj.mesh);
+            const finalObjCenter = finalObjBox.getCenter(new THREE.Vector3());
+            const newCenter = new THREE.Vector3(finalObjCenter.x, obj.mesh.position.y, finalObjCenter.z);
             this.physicsManager.setBodyPosition(obj.physicsBody, newCenter);
             obj.physicsBody.velocity.set(0, 0, 0);
             obj.physicsBody.angularVelocity.set(0, 0, 0);
