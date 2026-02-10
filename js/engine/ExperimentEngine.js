@@ -1394,7 +1394,9 @@ export class ExperimentEngine {
                 const mass = objectData.properties.mass || 1;
                 let body = null;
                 
-                if (lowerName.includes('beaker') || lowerName.includes('conical') || lowerName.includes('flask') || lowerName.includes('cylinder')) {
+                if (lowerName.includes('burner') && lowerName.includes('stand')) {
+                    body = null;
+                } else if (lowerName.includes('beaker') || lowerName.includes('conical') || lowerName.includes('flask') || lowerName.includes('cylinder')) {
                     body = this.physicsManager.createCylinderBody(model, mass);
                 } else if (lowerName.includes('sphere') || lowerName.includes('ball')) {
                     body = this.physicsManager.createSphereBody(model, mass);
@@ -1705,21 +1707,36 @@ export class ExperimentEngine {
                     if (burnerStandObj && burnerStandObj.mesh) {
                         const burnerMesh = this.burnerStand || burnerStandObj.mesh;
                         burnerMesh.updateMatrixWorld(true);
-                        obj.mesh.updateMatrixWorld(true);
                         
                         const burnerBox = new THREE.Box3().setFromObject(burnerMesh);
                         const burnerCenter = burnerBox.getCenter(new THREE.Vector3());
                         const burnerSize = burnerBox.getSize(new THREE.Vector3());
                         const burnerBottom = burnerBox.min.y;
                         
-                        const lampBox = new THREE.Box3().setFromObject(obj.mesh);
-                        const lampSize = lampBox.getSize(new THREE.Vector3());
-                        const targetY = burnerBottom + (burnerSize.y * 0.02) + (lampSize.y * 0.05);
+                        if (!obj.userData.lockedPosition) {
+                            const lampBox = new THREE.Box3().setFromObject(obj.mesh);
+                            const lampSize = lampBox.getSize(new THREE.Vector3());
+                            const burnerHeight = burnerBox.max.y - burnerBottom;
+                            const lampBottomOffset = lampSize.y * 0.5;
+                            const targetY = burnerBottom + (burnerHeight * 0.25) + lampBottomOffset;
+                            obj.userData.lockedPosition = new THREE.Vector3(burnerCenter.x, targetY, burnerCenter.z);
+                        }
                         
-                        obj.mesh.position.x = burnerCenter.x;
-                        obj.mesh.position.z = burnerCenter.z;
-                        obj.mesh.position.y = targetY;
+                        const targetPos = obj.userData.lockedPosition;
+                        obj.mesh.position.copy(targetPos);
                         obj.mesh.updateMatrixWorld(true);
+                        
+                        if (obj.physicsBody && this.physicsManager) {
+                            const world = this.physicsManager.world;
+                            if (world && world.bodies && world.bodies.includes(obj.physicsBody)) {
+                                world.removeBody(obj.physicsBody);
+                            }
+                            obj.physicsBody.type = this.physicsManager.CANNON.Body.KINEMATIC;
+                            this.physicsManager.setBodyPosition(obj.physicsBody, targetPos);
+                            obj.physicsBody.velocity.set(0, 0, 0);
+                            obj.physicsBody.angularVelocity.set(0, 0, 0);
+                            obj.physicsBody.sleep();
+                        }
                     }
                     continue;
                 }
@@ -2527,22 +2544,32 @@ export class ExperimentEngine {
                         const burnerCenter = burnerBox.getCenter(new THREE.Vector3());
                         const burnerSize = burnerBox.getSize(new THREE.Vector3());
                         const burnerBottom = burnerBox.min.y;
+                        const burnerTop = burnerBox.max.y;
+                        const burnerHeight = burnerTop - burnerBottom;
                         
                         const lampBox = new THREE.Box3().setFromObject(obj.mesh);
                         const lampSize = lampBox.getSize(new THREE.Vector3());
-                        const targetY = burnerBottom + (burnerSize.y * 0.02) + (lampSize.y * 0.05);
+                        const lampBottomOffset = lampSize.y * 0.5;
+                        const targetY = burnerBottom + (burnerHeight * 0.25) + lampBottomOffset;
                         
-                        obj.mesh.position.x = burnerCenter.x;
-                        obj.mesh.position.z = burnerCenter.z;
-                        obj.mesh.position.y = targetY;
-                        obj.mesh.updateMatrixWorld(true);
+                        const targetPos = new THREE.Vector3(burnerCenter.x, targetY, burnerCenter.z);
+                        
+                        if (obj.mesh.position.distanceTo(targetPos) > 0.001) {
+                            obj.mesh.position.copy(targetPos);
+                            obj.mesh.updateMatrixWorld(true);
+                        }
                     
                     if (obj.physicsBody && this.physicsManager) {
+                        const world = this.physicsManager.world;
+                        if (world && world.bodies && world.bodies.includes(obj.physicsBody)) {
+                            world.removeBody(obj.physicsBody);
+                        }
                         const targetPos = new THREE.Vector3(burnerCenter.x, targetY, burnerCenter.z);
                         obj.physicsBody.type = this.physicsManager.CANNON.Body.KINEMATIC;
                         this.physicsManager.setBodyPosition(obj.physicsBody, targetPos);
                         obj.physicsBody.velocity.set(0, 0, 0);
                         obj.physicsBody.angularVelocity.set(0, 0, 0);
+                        obj.physicsBody.sleep();
                     }
                 }
                 return;
@@ -2647,12 +2674,15 @@ export class ExperimentEngine {
         
         const lampBox = new THREE.Box3().setFromObject(spiritLampObj.mesh);
         const lampSize = lampBox.getSize(new THREE.Vector3());
+        const lampCenter = lampBox.getCenter(new THREE.Vector3());
         
-        const targetY = burnerBottom + (burnerSize.y * 0.02) + (lampSize.y * 0.05);
+        const burnerHeight = burnerTop - burnerBottom;
+        const lampBottomOffset = lampSize.y * 0.5;
+        const targetY = burnerBottom + (burnerHeight * 0.25) + lampBottomOffset;
         
-        console.log('Burner box:', { bottom: burnerBottom, top: burnerTop, center: burnerCenter.y, size: burnerSize });
-        console.log('Lamp size:', lampSize);
-        console.log('Calculated targetY:', targetY, 'which is', ((targetY - burnerBottom) / burnerSize.y * 100).toFixed(1) + '% up from bottom');
+        console.log('Burner box:', { bottom: burnerBottom, top: burnerTop, center: burnerCenter.y, size: burnerSize, height: burnerHeight });
+        console.log('Lamp size:', lampSize, 'lamp center:', lampCenter);
+        console.log('Calculated targetY:', targetY, 'which is', ((targetY - burnerBottom) / burnerHeight * 100).toFixed(1) + '% up from bottom');
         
         console.log('Moving spirit lamp INSIDE burner - center:', burnerCenter, 'bottom:', burnerBottom, 'targetY:', targetY);
         
@@ -2671,19 +2701,19 @@ export class ExperimentEngine {
         }
         spiritLampObj.mesh.userData.isInsideBurnerStand = true;
         spiritLampObj.userData.isInsideBurnerStand = true;
+        spiritLampObj.userData.lockedPosition = targetPosition.clone();
         
-        if (spiritLampObj.physicsBody && this.physicsManager && this.physicsManager.world) {
+        if (spiritLampObj.physicsBody && this.physicsManager) {
             const world = this.physicsManager.world;
-            
-            if (world.bodies && world.bodies.includes(spiritLampObj.physicsBody)) {
+            if (world && world.bodies && world.bodies.includes(spiritLampObj.physicsBody)) {
                 world.removeBody(spiritLampObj.physicsBody);
-                console.log('Removed spirit lamp from physics world to prevent collision');
+                console.log('Removed spirit lamp physics body from world to prevent collisions');
             }
-            
             spiritLampObj.physicsBody.type = this.physicsManager.CANNON.Body.KINEMATIC;
-            spiritLampObj.physicsBody.position.set(targetPosition.x, targetPosition.y, targetPosition.z);
+            this.physicsManager.setBodyPosition(spiritLampObj.physicsBody, targetPosition);
             spiritLampObj.physicsBody.velocity.set(0, 0, 0);
             spiritLampObj.physicsBody.angularVelocity.set(0, 0, 0);
+            spiritLampObj.physicsBody.sleep();
         }
         
         const lowerName = spiritLampObj.name.toLowerCase();
