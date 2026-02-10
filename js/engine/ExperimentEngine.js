@@ -4151,25 +4151,30 @@ export class ExperimentEngine {
         }
         
         const currentHeight = liquidMesh.geometry.parameters.height;
-        if (Math.abs(currentHeight - liquidHeight) > 0.01) {
+        if (Math.abs(currentHeight - liquidHeight) > 0.001) {
             liquidMesh.geometry.dispose();
             const segments = this.performanceManager.getGeometrySegments();
             liquidMesh.geometry = new THREE.CylinderGeometry(radius, radius, liquidHeight, segments);
+            liquidMesh.geometry.computeBoundingBox();
         }
         
-        const containerCenter = box.getCenter(new THREE.Vector3());
-        const containerBottom = minYWorld;
+        obj.mesh.updateMatrixWorld(true);
+        const updatedBox = new THREE.Box3().setFromObject(obj.mesh);
+        const updatedSize = updatedBox.getSize(new THREE.Vector3());
+        const containerCenter = updatedBox.getCenter(new THREE.Vector3());
+        const containerBottom = updatedBox.min.y;
         let liquidBottom, liquidCenterY;
         
         if (isRod) {
-            liquidBottom = containerBottom + (size.y * 0.1);
+            liquidBottom = containerBottom + (updatedSize.y * 0.1);
             liquidCenterY = liquidBottom + liquidHeight / 2;
         } else {
-            liquidBottom = containerBottom + (size.y * 0.05);
+            liquidBottom = containerBottom + (updatedSize.y * 0.05);
             liquidCenterY = liquidBottom + liquidHeight / 2;
         }
         
         liquidMesh.position.set(containerCenter.x, liquidCenterY, containerCenter.z);
+        liquidMesh.updateMatrixWorld(true);
         
         const color = this.getLiquidColor(obj);
         liquidMesh.material.color.copy(color);
@@ -5327,23 +5332,22 @@ export class ExperimentEngine {
         
         const transferAmount = 10;
         const sourceContent = nearbyContainer.properties.contents[0];
-        const transferVolume = Math.min(transferAmount, sourceContent.volume);
+        const maxTransferVolume = Math.min(transferAmount, sourceContent.volume);
         
-        if (transferVolume <= 0) {
+        if (maxTransferVolume <= 0) {
             return { success: false, message: 'No liquid available to transfer.' };
-        }
-        
-        sourceContent.volume -= transferVolume;
-        if (sourceContent.volume <= 0) {
-            nearbyContainer.properties.contents.shift();
         }
         
         const rodCapacity = rodObj.properties.capacity || 100;
         const currentRodVolume = this.calculateVolume(rodObj);
         const availableSpace = rodCapacity - currentRodVolume;
-        const actualTransfer = Math.min(transferVolume, availableSpace);
+        const actualTransfer = Math.min(maxTransferVolume, availableSpace);
         
         if (actualTransfer > 0) {
+            if (!rodObj.properties.contents) {
+                rodObj.properties.contents = [];
+            }
+            
             const existingContent = rodObj.properties.contents.find(c => c.type === sourceContent.type);
             if (existingContent) {
                 existingContent.volume += actualTransfer;
@@ -5354,18 +5358,23 @@ export class ExperimentEngine {
                 });
             }
             
-            if (sourceContent.volume < transferVolume) {
-                sourceContent.volume += (transferVolume - actualTransfer);
+            sourceContent.volume -= actualTransfer;
+            if (sourceContent.volume <= 0.001) {
+                const index = nearbyContainer.properties.contents.indexOf(sourceContent);
+                if (index >= 0) {
+                    nearbyContainer.properties.contents.splice(index, 1);
+                }
             }
             
-            this.measurements.volume[rodObj.name] = this.calculateVolume(rodObj);
-            this.measurements.volume[nearbyContainer.name] = this.calculateVolume(nearbyContainer);
-            
+            nearbyContainer.properties.volume = this.calculateVolume(nearbyContainer);
             rodObj.properties.volume = this.calculateVolume(rodObj);
             
+            this.measurements.volume[rodObj.name] = rodObj.properties.volume;
+            this.measurements.volume[nearbyContainer.name] = nearbyContainer.properties.volume;
+            
             if (this.updateLiquidMesh) {
-                this.updateLiquidMesh(rodObj);
                 this.updateLiquidMesh(nearbyContainer);
+                this.updateLiquidMesh(rodObj);
             }
             
             this.updateMeasurements(rodObj);
