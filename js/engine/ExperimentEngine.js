@@ -1715,10 +1715,15 @@ export class ExperimentEngine {
                         
                         if (!obj.userData.lockedPosition) {
                             const lampBox = new THREE.Box3().setFromObject(obj.mesh);
-                            const lampSize = lampBox.getSize(new THREE.Vector3());
-                            const burnerHeight = burnerBox.max.y - burnerBottom;
-                            const lampBottomOffset = lampSize.y * 0.5;
-                            const targetY = burnerBottom + (burnerHeight * 0.25) + lampBottomOffset;
+                            const lampHeight = lampBox.getSize(new THREE.Vector3()).y;
+                            const lampBottom = lampBox.min.y;
+                            const tableTopY = this.tableBounds ? this.tableBounds.y : burnerBottom;
+                            
+                            const deltaY = tableTopY - lampBottom;
+                            const visualInset = Math.max(lampHeight * 0.01, 0.001);
+                            const finalYOffset = deltaY - visualInset;
+                            const targetY = obj.mesh.position.y + finalYOffset;
+                            
                             obj.userData.lockedPosition = new THREE.Vector3(burnerCenter.x, targetY, burnerCenter.z);
                         }
                         
@@ -2544,13 +2549,16 @@ export class ExperimentEngine {
                         const burnerCenter = burnerBox.getCenter(new THREE.Vector3());
                         const burnerSize = burnerBox.getSize(new THREE.Vector3());
                         const burnerBottom = burnerBox.min.y;
-                        const burnerTop = burnerBox.max.y;
-                        const burnerHeight = burnerTop - burnerBottom;
                         
                         const lampBox = new THREE.Box3().setFromObject(obj.mesh);
-                        const lampSize = lampBox.getSize(new THREE.Vector3());
-                        const lampBottomOffset = lampSize.y * 0.5;
-                        const targetY = burnerBottom + (burnerHeight * 0.25) + lampBottomOffset;
+                        const lampHeight = lampBox.getSize(new THREE.Vector3()).y;
+                        const lampBottom = lampBox.min.y;
+                        const tableTopY = this.tableBounds ? this.tableBounds.y : burnerBottom;
+                        
+                        const deltaY = tableTopY - lampBottom;
+                        const visualInset = Math.max(lampHeight * 0.01, 0.001);
+                        const finalYOffset = deltaY - visualInset;
+                        const targetY = obj.mesh.position.y + finalYOffset;
                         
                         const targetPos = new THREE.Vector3(burnerCenter.x, targetY, burnerCenter.z);
                         
@@ -2672,21 +2680,35 @@ export class ExperimentEngine {
         const burnerBottom = burnerBox.min.y;
         const burnerTop = burnerBox.max.y;
         
-        const lampBox = new THREE.Box3().setFromObject(spiritLampObj.mesh);
-        const lampSize = lampBox.getSize(new THREE.Vector3());
-        const lampCenter = lampBox.getCenter(new THREE.Vector3());
+        // First snap X/Z to burner center
+        spiritLampObj.mesh.position.x = burnerCenter.x;
+        spiritLampObj.mesh.position.z = burnerCenter.z;
+        spiritLampObj.mesh.updateMatrixWorld(true);
         
+        // Recompute lamp bounds after X/Z move
+        const lampBox = new THREE.Box3().setFromObject(spiritLampObj.mesh);
+        const lampHeight = lampBox.getSize(new THREE.Vector3()).y;
+        const lampBottom = lampBox.min.y;
+        
+        const tableTopY = this.tableBounds ? this.tableBounds.y : burnerBottom;
         const burnerHeight = burnerTop - burnerBottom;
-        const lampBottomOffset = lampSize.y * 0.5;
-        const targetY = burnerBottom + (burnerHeight * 0.25) + lampBottomOffset;
+        
+        // Compute how much to move vertically so the lamp bottom slightly intersects the table
+        const deltaY = tableTopY - lampBottom;
+        const visualInset = Math.max(lampHeight * 0.01, 0.001);
+        const finalYOffset = deltaY - visualInset;
+        
+        spiritLampObj.mesh.position.y += finalYOffset;
+        spiritLampObj.mesh.updateMatrixWorld(true);
+        
+        const finalLampBox = new THREE.Box3().setFromObject(spiritLampObj.mesh);
+        const finalBottom = finalLampBox.min.y;
         
         console.log('Burner box:', { bottom: burnerBottom, top: burnerTop, center: burnerCenter.y, size: burnerSize, height: burnerHeight });
-        console.log('Lamp size:', lampSize, 'lamp center:', lampCenter);
-        console.log('Calculated targetY:', targetY, 'which is', ((targetY - burnerBottom) / burnerHeight * 100).toFixed(1) + '% up from bottom');
+        console.log('Table top Y:', tableTopY);
+        console.log('Lamp move deltaY:', deltaY, 'visualInset:', visualInset, 'finalBottom:', finalBottom);
         
-        console.log('Moving spirit lamp INSIDE burner - center:', burnerCenter, 'bottom:', burnerBottom, 'targetY:', targetY);
-        
-        const targetPosition = new THREE.Vector3(burnerCenter.x, targetY, burnerCenter.z);
+        const targetPosition = spiritLampObj.mesh.position.clone();
         
         spiritLampObj.mesh.position.x = targetPosition.x;
         spiritLampObj.mesh.position.z = targetPosition.z;
