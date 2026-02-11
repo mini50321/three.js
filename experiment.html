@@ -969,6 +969,7 @@
                 <button id="reset-btn" disabled>Reset</button>
                 <button id="validate-btn" disabled>Validate Step</button>
                 <button id="lamp-fire-btn" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); display: none;">Turn On Lamp</button>
+                <button id="hold-temp-btn" style="background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%); display: none;">Hold Temperature</button>
                 <button id="labware-btn" style="background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);">Labware</button>
                 <a href="../" class="btn-link">Back to Home</a>
             </div>
@@ -1289,6 +1290,17 @@
                         if (chemicalControls) chemicalControls.style.display = 'block';
                         if (powderControls) powderControls.style.display = 'block';
                         if (reactionControls) reactionControls.style.display = 'block';
+                        const holdTempBtn = document.getElementById('hold-temp-btn');
+                        if (holdTempBtn && holdTempBtn.style.display !== 'none') {
+                            const isHeld = engine && engine.temperatureHeld && engine.temperatureHeld.get(obj.name);
+                            if (isHeld) {
+                                holdTempBtn.textContent = 'Release Temperature';
+                                holdTempBtn.style.background = 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)';
+                            } else {
+                                holdTempBtn.textContent = 'Hold Temperature';
+                                holdTempBtn.style.background = 'linear-gradient(135deg, #2196F3 0%, #1976D2 100%)';
+                            }
+                        }
                     } else {
                         if (chemicalControls) chemicalControls.style.display = 'none';
                         if (powderControls) powderControls.style.display = 'none';
@@ -1995,6 +2007,20 @@
                 } else {
                     btn.textContent = 'Turn On Lamp';
                     btn.style.background = 'linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)';
+                }
+            }
+        });
+
+        document.getElementById('hold-temp-btn').addEventListener('click', () => {
+            if (engine) {
+                const isHeld = engine.toggleTemperatureHold();
+                const btn = document.getElementById('hold-temp-btn');
+                if (isHeld) {
+                    btn.textContent = 'Release Temperature';
+                    btn.style.background = 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)';
+                } else {
+                    btn.textContent = 'Hold Temperature';
+                    btn.style.background = 'linear-gradient(135deg, #2196F3 0%, #1976D2 100%)';
                 }
             }
         });

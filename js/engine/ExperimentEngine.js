@@ -47,6 +47,7 @@ export class ExperimentEngine {
         };
         this.heatingDuration = new Map();
         this.heatingStartTime = new Map();
+        this.temperatureHeld = new Map();
         this.measurements = {
             volume: {},
             mass: {},
@@ -523,6 +524,32 @@ export class ExperimentEngine {
         }
         
         return this.spiritLampFireOn;
+    }
+
+    toggleTemperatureHold(objectName = null) {
+        let targetObj = null;
+        
+        if (objectName) {
+            targetObj = this.objects.get(objectName);
+        } else if (this.selectedObject && this.selectedObject.properties.isContainer) {
+            targetObj = this.selectedObject;
+        } else {
+            for (const [name, obj] of this.objects) {
+                if (obj.properties.isContainer && obj.properties.contents && obj.properties.contents.length > 0) {
+                    targetObj = obj;
+                    break;
+                }
+            }
+        }
+        
+        if (!targetObj || !targetObj.properties.isContainer) {
+            return false;
+        }
+        
+        const currentState = this.temperatureHeld.get(targetObj.name) || false;
+        this.temperatureHeld.set(targetObj.name, !currentState);
+        
+        return !currentState;
     }
 
 
@@ -1626,6 +1653,13 @@ export class ExperimentEngine {
                                  (this.objects.has('Spirit Lamp') && this.objects.get('Spirit Lamp').mesh);
             btn.style.display = hasSpiritLamp ? 'block' : 'none';
         }
+        
+        const holdTempBtn = document.getElementById('hold-temp-btn');
+        if (holdTempBtn) {
+            const hasSpiritLamp = this.spiritLamp !== null || 
+                                 (this.objects.has('Spirit Lamp') && this.objects.get('Spirit Lamp').mesh);
+            holdTempBtn.style.display = hasSpiritLamp ? 'block' : 'none';
+        }
     }
 
     extractModelName(path) {
@@ -1795,9 +1829,11 @@ export class ExperimentEngine {
                                       verticalDistance <= maxVerticalDistance;
                     
                     if (isNearFlame) {
-                        const heatRatePerSecond = 3;
-                        const tempIncrease = heatRatePerSecond * deltaTime;
-                        obj.properties.temperature = Math.min(obj.properties.temperature + tempIncrease, 200);
+                        if (!this.temperatureHeld.get(obj.name)) {
+                            const heatRatePerSecond = 3;
+                            const tempIncrease = heatRatePerSecond * deltaTime;
+                            obj.properties.temperature = Math.min(obj.properties.temperature + tempIncrease, 200);
+                        }
                     } else {
                         if (obj.name === 'Beaker' || obj.name.toLowerCase().includes('beaker')) {
                             console.log(`Beaker not near flame: horizontal=${horizontalDistance.toFixed(3)}m (max=${maxHorizontalDistance}), vertical=${verticalDistance.toFixed(3)}m (range: ${minVerticalDistance} to ${maxVerticalDistance}), flame at (${flamePosition.x.toFixed(3)}, ${flamePosition.y.toFixed(3)}, ${flamePosition.z.toFixed(3)}), beaker at (${objCenter.x.toFixed(3)}, ${objCenter.y.toFixed(3)}, ${objCenter.z.toFixed(3)})`);
@@ -1806,9 +1842,11 @@ export class ExperimentEngine {
                 }
                 
                 if (!this.spiritLampFireOn && obj.properties.temperature > 0) {
-                    const coolRatePerSecond = 2;
-                    const tempDecrease = coolRatePerSecond * deltaTime;
-                    obj.properties.temperature = Math.max(obj.properties.temperature - tempDecrease, 0);
+                    if (!this.temperatureHeld.get(obj.name)) {
+                        const coolRatePerSecond = 2;
+                        const tempDecrease = coolRatePerSecond * deltaTime;
+                        obj.properties.temperature = Math.max(obj.properties.temperature - tempDecrease, 0);
+                    }
                 }
                 
                 if (obj.properties.isContainer && obj.properties.contents && obj.properties.contents.length > 0) {
@@ -1987,11 +2025,15 @@ export class ExperimentEngine {
                     const heatingDistance = 1.5;
                     
                     if (distance < heatingDistance && obj.properties.isContainer && obj.properties.volume > 0) {
-                        const heatRate = 0.3 * (1 - distance / heatingDistance);
-                        obj.properties.temperature = Math.min(obj.properties.temperature + heatRate, 200);
+                        if (!this.temperatureHeld.get(obj.name)) {
+                            const heatRate = 0.3 * (1 - distance / heatingDistance);
+                            obj.properties.temperature = Math.min(obj.properties.temperature + heatRate, 200);
+                        }
                     }
                 } else if (obj.properties.temperature > 20) {
-                    obj.properties.temperature -= 0.05;
+                    if (!this.temperatureHeld.get(obj.name)) {
+                        obj.properties.temperature -= 0.05;
+                    }
                 }
                 
                 if (obj.properties.isContainer && obj.properties.contents && obj.properties.contents.length > 0) {
