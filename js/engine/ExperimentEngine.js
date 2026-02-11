@@ -1795,13 +1795,9 @@ export class ExperimentEngine {
                                       verticalDistance <= maxVerticalDistance;
                     
                     if (isNearFlame) {
-                        const heatRatePerSecond = 15;
-                        const oldTemp = obj.properties.temperature;
+                        const heatRatePerSecond = 3;
                         const tempIncrease = heatRatePerSecond * deltaTime;
                         obj.properties.temperature = Math.min(obj.properties.temperature + tempIncrease, 200);
-                        if (Math.floor(oldTemp) !== Math.floor(obj.properties.temperature)) {
-                            console.log(`Heating ${obj.name} near flame: ${oldTemp.toFixed(1)}°C -> ${obj.properties.temperature.toFixed(1)}°C (distance: ${horizontalDistance.toFixed(3)}m, height: ${verticalDistance.toFixed(3)}m)`);
-                        }
                     } else {
                         if (obj.name === 'Beaker' || obj.name.toLowerCase().includes('beaker')) {
                             console.log(`Beaker not near flame: horizontal=${horizontalDistance.toFixed(3)}m (max=${maxHorizontalDistance}), vertical=${verticalDistance.toFixed(3)}m (range: ${minVerticalDistance} to ${maxVerticalDistance}), flame at (${flamePosition.x.toFixed(3)}, ${flamePosition.y.toFixed(3)}, ${flamePosition.z.toFixed(3)}), beaker at (${objCenter.x.toFixed(3)}, ${objCenter.y.toFixed(3)}, ${objCenter.z.toFixed(3)})`);
