@@ -40,6 +40,7 @@ export class ExperimentEngine {
         this.gasMeshes = new Map();
         this.labels = new Map();
         this.showLabels = true;
+        this.closedLabels = new Set();
         this.chemicalStates = {
             solid: ['powder', 'salt', 'sugar', 'copper', 'iron', 'sodium', 'calcium', 'carbonate'],
             gas: ['gas', 'vapor', 'smoke', 'steam', 'co2', 'oxygen', 'hydrogen', 'chlorine']
@@ -3395,7 +3396,7 @@ export class ExperimentEngine {
             labelElement.className = 'chemical-label';
             labelElement.style.cssText = `
                 position: absolute;
-                pointer-events: none;
+                pointer-events: auto;
                 background: rgba(255, 255, 255, 0.95);
                 border: 2px solid #4a90e2;
                 border-radius: 6px;
@@ -3409,7 +3410,44 @@ export class ExperimentEngine {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                 transform: translate(-50%, -100%);
                 margin-top: -10px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
             `;
+            
+            const labelText = document.createElement('span');
+            labelText.className = 'label-text';
+            labelText.style.cssText = `
+                pointer-events: none;
+            `;
+            labelElement.appendChild(labelText);
+            
+            const closeButton = document.createElement('span');
+            closeButton.className = 'label-close';
+            closeButton.innerHTML = '×';
+            closeButton.style.cssText = `
+                cursor: pointer;
+                font-size: 18px;
+                font-weight: bold;
+                color: #666;
+                line-height: 1;
+                padding: 0 2px;
+                user-select: none;
+                transition: color 0.2s;
+            `;
+            closeButton.addEventListener('mouseenter', () => {
+                closeButton.style.color = '#e74c3c';
+            });
+            closeButton.addEventListener('mouseleave', () => {
+                closeButton.style.color = '#666';
+            });
+            closeButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.closedLabels.add(obj.name);
+                labelElement.style.display = 'none';
+            });
+            labelElement.appendChild(closeButton);
+            
             this.container.appendChild(labelElement);
         }
         
@@ -3446,8 +3484,15 @@ export class ExperimentEngine {
             return;
         }
         
-        labelElement.textContent = chemicalNames.join(', ');
-        labelElement.style.display = this.showLabels ? 'block' : 'none';
+        const labelText = labelElement.querySelector('.label-text');
+        if (labelText) {
+            labelText.textContent = chemicalNames.join(', ');
+        }
+        if (this.closedLabels.has(obj.name)) {
+            labelElement.style.display = 'none';
+        } else {
+            labelElement.style.display = this.showLabels ? 'flex' : 'none';
+        }
         
         this.updateLabelPosition(obj, labelElement);
     }
