@@ -1864,11 +1864,14 @@ export class ExperimentEngine {
                     
                     if (hasAcid && temp >= 90) {
                         const hasBrownGas = contentTypes.some(type => type.includes('brown_gas'));
+                        console.log('[BROWN_GAS DEBUG] temp:', temp, 'hasAcid:', hasAcid, 'hasBrownGas:', hasBrownGas);
                         if (!hasBrownGas) {
                             const acidContent = obj.properties.contents.find(c => (c.type || '').toLowerCase().includes('acid'));
                             if (acidContent && acidContent.volume > 0) {
-                                const brownGasVolume = Math.max(acidContent.volume * 0.3, 0.01);
+                                const brownGasVolume = Math.max(acidContent.volume * 0.3, 0.1);
+                                console.log('[BROWN_GAS DEBUG] Adding brown_gas, volume:', brownGasVolume);
                                 obj.properties.contents.push({ type: 'brown_gas', volume: brownGasVolume, mass: 0 });
+                                console.log('[BROWN_GAS DEBUG] Contents after adding:', obj.properties.contents.map(c => ({ type: c.type, volume: c.volume })));
                                 
                                 if (this.updateLiquidMesh) {
                                     this.updateLiquidMesh(obj);
@@ -1878,7 +1881,9 @@ export class ExperimentEngine {
                                     this.removeSmokeEffect(obj);
                                 }
                                 
-                                this.createSmokeEffect(obj);
+                                setTimeout(() => {
+                                    this.createSmokeEffect(obj);
+                                }, 100);
                             }
                         } else {
                             if (!this.effects.has(obj.name + '_smoke')) {
@@ -3022,11 +3027,14 @@ export class ExperimentEngine {
 
     getChemicalState(contentType) {
         const type = (contentType || '').toLowerCase();
+        if (this.chemicalStates.gas.some(gas => {
+            const gasLower = gas.toLowerCase();
+            return type === gasLower || type.includes('_' + gasLower) || type.includes(gasLower + '_') || type.endsWith(gasLower) || type.startsWith(gasLower);
+        })) {
+            return 'gas';
+        }
         if (this.chemicalStates.solid.some(solid => type.includes(solid))) {
             return 'solid';
-        }
-        if (this.chemicalStates.gas.some(gas => type.includes(gas))) {
-            return 'gas';
         }
         return 'liquid';
     }
@@ -3202,16 +3210,43 @@ export class ExperimentEngine {
         const beakerTopY = maxYWorld - sizeVec.y * 0.02;
         const spawnY = liquidVolume > 0.001 ? liquidSurfaceY : beakerTopY;
         
+        console.log('[SMOKE DEBUG] Creating smoke effect for:', obj.name);
+        console.log('[SMOKE DEBUG] All contents:', obj.properties.contents ? obj.properties.contents.map(c => ({ type: c.type, volume: c.volume, mass: c.mass })) : []);
+        
         const gasContents = obj.properties.contents ? 
-            obj.properties.contents.filter(c => this.getChemicalState(c.type) === 'gas' && (c.volume || 0) > 0.001) : [];
+            obj.properties.contents.filter(c => {
+                const type = (c.type || '').toLowerCase();
+                const isBrownGas = type === 'brown_gas' || type.includes('brown_gas');
+                const state = isBrownGas ? 'gas' : this.getChemicalState(c.type);
+                const volume = c.volume || 0;
+                const mass = c.mass || 0;
+                const hasAmount = volume > 0.001 || mass > 0.001;
+                const isGas = state === 'gas';
+                console.log('[SMOKE DEBUG] Checking content:', c.type, 'isBrownGas:', isBrownGas, 'state:', state, 'volume:', volume, 'mass:', mass, 'isGas:', isGas, 'hasAmount:', hasAmount, 'passes filter:', isGas && hasAmount);
+                return isGas && hasAmount;
+            }) : [];
         const firstGas = gasContents.length > 0 ? gasContents[0] : null;
         const gasType = firstGas ? (firstGas.type || '').toLowerCase() : null;
+        
+        const hasBrownGas = gasContents.some(c => {
+            const type = (c.type || '').toLowerCase();
+            return type === 'brown_gas' || type.includes('brown_gas') || type.includes('brown');
+        });
+        
+        console.log('[SMOKE DEBUG] Gas contents after filter:', gasContents.map(c => ({ type: c.type, volume: c.volume })));
+        console.log('[SMOKE DEBUG] hasBrownGas:', hasBrownGas, 'gasType:', gasType);
+        
+        console.log('[SMOKE DEBUG] Creating smoke effect for:', obj.name);
+        console.log('[SMOKE DEBUG] Gas contents:', gasContents.map(c => ({ type: c.type, volume: c.volume })));
+        console.log('[SMOKE DEBUG] hasBrownGas:', hasBrownGas);
+        console.log('[SMOKE DEBUG] gasType:', gasType);
         
         const defaultSmokeColor = 0xcccccc;
         let smokeColor = defaultSmokeColor;
         
-        if (gasType === 'brown_gas') {
+        if (hasBrownGas || gasType === 'brown_gas' || (gasType && (gasType.includes('brown_gas') || gasType.includes('brown')))) {
             smokeColor = 0x8b4513;
+            console.log('[SMOKE DEBUG] Setting smoke color to BROWN:', smokeColor);
         } else if (gasType && this.config.smokeColors && Array.isArray(this.config.smokeColors)) {
             const configColor = this.config.smokeColors.find(sc => 
                 (sc.type || '').toLowerCase() === gasType
@@ -3235,23 +3270,48 @@ export class ExperimentEngine {
             }
         }
         
-        const isBrownGas = gasType === 'brown_gas';
+        const isBrownGas = hasBrownGas || gasType === 'brown_gas' || (gasType && (gasType.includes('brown_gas') || gasType.includes('brown')));
+        console.log('[SMOKE DEBUG] isBrownGas:', isBrownGas);
         const baseOpacity = isBrownGas ? 0.7 : 0.15;
         const opacityRange = isBrownGas ? 0.3 : 0.25;
         const baseSize = isBrownGas ? 0.02 : 0.008;
         const sizeRange = isBrownGas ? 0.03 : 0.012;
         const finalParticleCount = isBrownGas ? Math.max(particleCount, 200) : particleCount;
+        console.log('[SMOKE DEBUG] Creating', finalParticleCount, 'particles, isBrownGas:', isBrownGas);
+        
+        const finalColor = isBrownGas ? 0x8b4513 : smokeColor;
         
         for (let i = 0; i < finalParticleCount; i++) {
             const size = baseSize + Math.random() * sizeRange;
+            const material = new THREE.MeshBasicMaterial({ 
+                color: finalColor,
+                transparent: true, 
+                opacity: baseOpacity + Math.random() * opacityRange
+            });
+            const particleMaterial = new THREE.MeshBasicMaterial({ 
+                transparent: true, 
+                opacity: baseOpacity + Math.random() * opacityRange
+            });
+            
+            if (isBrownGas) {
+                particleMaterial.color.r = 139/255;
+                particleMaterial.color.g = 69/255;
+                particleMaterial.color.b = 19/255;
+            } else {
+                particleMaterial.color.setHex(finalColor);
+            }
+            
             const particle = new THREE.Mesh(
                 new THREE.SphereGeometry(size, 8, 8),
-                new THREE.MeshBasicMaterial({ 
-                    color: isBrownGas ? 0x8b4513 : smokeColor,
-                    transparent: true, 
-                    opacity: baseOpacity + Math.random() * opacityRange
-                })
+                particleMaterial
             );
+            
+            if (isBrownGas) {
+                particle.material.color.r = 139/255;
+                particle.material.color.g = 69/255;
+                particle.material.color.b = 19/255;
+                console.log('[SMOKE DEBUG] Particle', i, 'color set to brown:', particle.material.color.r, particle.material.color.g, particle.material.color.b);
+            }
             
             particle.position.set(
                 containerCenter.x + (Math.random() - 0.5) * sizeVec.x * 0.3,
@@ -3485,8 +3545,28 @@ export class ExperimentEngine {
                 const spawnY = liquidVolume > 0.001 ? liquidSurfaceY : beakerTopY;
                 const maxHeight = maxYWorld + 3;
                 
+                const gasContents = obj.properties.contents ? 
+                    obj.properties.contents.filter(c => this.getChemicalState(c.type) === 'gas' && (c.volume || 0) > 0.001) : [];
+                const hasBrownGas = gasContents.some(c => {
+                    const type = (c.type || '').toLowerCase();
+                    return type === 'brown_gas' || type.includes('brown_gas') || type.includes('brown');
+                });
+                const isBrownGas = hasBrownGas;
+                
+                if (isBrownGas && effect.particles.length > 0) {
+                    const firstParticle = effect.particles[0];
+                    const currentColor = firstParticle.material.color;
+                    console.log('[SMOKE UPDATE] isBrownGas:', isBrownGas, 'Current color:', currentColor.r, currentColor.g, currentColor.b);
+                }
+                
                 effect.particles.forEach(particle => {
                     const userData = particle.userData;
+                    
+                    if (isBrownGas) {
+                        particle.material.color.r = 139/255;
+                        particle.material.color.g = 69/255;
+                        particle.material.color.b = 19/255;
+                    }
                     
                     particle.velocity.x += Math.sin(effect.time * 2 + userData.turbulence.phase) * 0.001;
                     particle.velocity.z += Math.cos(effect.time * 2 + userData.turbulence.phase) * 0.001;
@@ -3513,24 +3593,37 @@ export class ExperimentEngine {
                     if (shouldRegenerate) {
                         const gasContents = obj.properties.contents ? 
                             obj.properties.contents.filter(c => this.getChemicalState(c.type) === 'gas' && (c.volume || 0) > 0.001) : [];
-                        const firstGas = gasContents.length > 0 ? gasContents[0] : null;
-                        const gasType = firstGas ? (firstGas.type || '').toLowerCase() : null;
-                        const isBrownGas = gasType === 'brown_gas';
+                        const hasBrownGas = gasContents.some(c => {
+                            const type = (c.type || '').toLowerCase();
+                            return type === 'brown_gas' || type.includes('brown_gas') || type.includes('brown');
+                        });
+                        const isBrownGas = hasBrownGas;
                         
-                        const baseSize = isBrownGas ? 0.012 : 0.008;
-                        const sizeRange = isBrownGas ? 0.018 : 0.012;
+                        const baseSize = isBrownGas ? 0.02 : 0.008;
+                        const sizeRange = isBrownGas ? 0.03 : 0.012;
                         const size = baseSize + Math.random() * sizeRange;
                         
                         particle.geometry.dispose();
-                        particle.geometry = new THREE.SphereGeometry(size, 6, 6);
+                        particle.geometry = new THREE.SphereGeometry(size, 8, 8);
                         
-                        const baseOpacity = isBrownGas ? 0.4 : 0.15;
-                        const opacityRange = isBrownGas ? 0.4 : 0.25;
-                        particle.material.opacity = baseOpacity + Math.random() * opacityRange;
+                        const baseOpacity = isBrownGas ? 0.7 : 0.15;
+                        const opacityRange = isBrownGas ? 0.3 : 0.25;
+                        const particleColor = isBrownGas ? 0x8b4513 : 0xcccccc;
                         
+                        particle.material.dispose();
+                        const newMaterial = new THREE.MeshBasicMaterial({
+                            color: isBrownGas ? 0x8b4513 : 0xcccccc,
+                            transparent: true,
+                            opacity: baseOpacity + Math.random() * opacityRange
+                        });
                         if (isBrownGas) {
-                            particle.material.color.setHex(0x8b4513);
+                            newMaterial.color.r = 139/255;
+                            newMaterial.color.g = 69/255;
+                            newMaterial.color.b = 19/255;
+                        } else {
+                            newMaterial.color.setHex(0xcccccc);
                         }
+                        particle.material = newMaterial;
                         
                         particle.position.set(
                             containerCenter.x + (Math.random() - 0.5) * sizeVec.x * 0.3,
