@@ -72,7 +72,9 @@ class Database {
             $configJson = json_encode([
                 'models' => $data['models'] ?? [],
                 'initialState' => $data['initialState'] ?? [],
-                'reactions' => $data['reactions'] ?? []
+                'reactions' => $data['reactions'] ?? [],
+                'powderColors' => $data['powderColors'] ?? [],
+                'smokeColors' => $data['smokeColors'] ?? []
             ]);
             
             $stmt->execute([
@@ -161,7 +163,9 @@ class Database {
             $configJson = json_encode([
                 'models' => $data['models'] ?? [],
                 'initialState' => $data['initialState'] ?? [],
-                'reactions' => $data['reactions'] ?? []
+                'reactions' => $data['reactions'] ?? [],
+                'powderColors' => $data['powderColors'] ?? [],
+                'smokeColors' => $data['smokeColors'] ?? []
             ]);
             
             $stmt->execute([
@@ -264,6 +268,8 @@ class Database {
         $exp['models'] = $config['models'] ?? [];
         $exp['initialState'] = $config['initialState'] ?? [];
         $exp['reactions'] = $config['reactions'] ?? [];
+        $exp['powderColors'] = $config['powderColors'] ?? [];
+        $exp['smokeColors'] = $config['smokeColors'] ?? [];
         
         $stepStmt = $this->db->prepare("
             SELECT * FROM experiment_steps 

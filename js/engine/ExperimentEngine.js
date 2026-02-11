@@ -42,9 +42,11 @@ export class ExperimentEngine {
         this.showLabels = true;
         this.closedLabels = new Set();
         this.chemicalStates = {
-            solid: ['powder', 'salt', 'sugar', 'copper', 'iron', 'sodium', 'calcium', 'carbonate'],
-            gas: ['gas', 'vapor', 'smoke', 'steam', 'co2', 'oxygen', 'hydrogen', 'chlorine']
+            solid: ['powder', 'salt', 'sugar', 'copper', 'iron', 'sodium', 'calcium', 'carbonate', 'yellow_powder', 'blue_powder'],
+            gas: ['gas', 'vapor', 'smoke', 'steam', 'co2', 'oxygen', 'hydrogen', 'chlorine', 'brown_gas']
         };
+        this.heatingDuration = new Map();
+        this.heatingStartTime = new Map();
         this.measurements = {
             volume: {},
             mass: {},
@@ -1793,9 +1795,10 @@ export class ExperimentEngine {
                                       verticalDistance <= maxVerticalDistance;
                     
                     if (isNearFlame) {
-                        const heatRate = 0.5;
+                        const heatRatePerSecond = 15;
                         const oldTemp = obj.properties.temperature;
-                        obj.properties.temperature = Math.min(obj.properties.temperature + heatRate, 200);
+                        const tempIncrease = heatRatePerSecond * deltaTime;
+                        obj.properties.temperature = Math.min(obj.properties.temperature + tempIncrease, 200);
                         if (Math.floor(oldTemp) !== Math.floor(obj.properties.temperature)) {
                             console.log(`Heating ${obj.name} near flame: ${oldTemp.toFixed(1)}°C -> ${obj.properties.temperature.toFixed(1)}°C (distance: ${horizontalDistance.toFixed(3)}m, height: ${verticalDistance.toFixed(3)}m)`);
                         }
@@ -1804,13 +1807,38 @@ export class ExperimentEngine {
                             console.log(`Beaker not near flame: horizontal=${horizontalDistance.toFixed(3)}m (max=${maxHorizontalDistance}), vertical=${verticalDistance.toFixed(3)}m (range: ${minVerticalDistance} to ${maxVerticalDistance}), flame at (${flamePosition.x.toFixed(3)}, ${flamePosition.y.toFixed(3)}, ${flamePosition.z.toFixed(3)}), beaker at (${objCenter.x.toFixed(3)}, ${objCenter.y.toFixed(3)}, ${objCenter.z.toFixed(3)})`);
                         }
                     }
-                } else if (obj.properties.temperature > 20) {
-                    obj.properties.temperature -= 0.05;
+                }
+                
+                if (!this.spiritLampFireOn && obj.properties.temperature > 0) {
+                    const coolRatePerSecond = 2;
+                    const tempDecrease = coolRatePerSecond * deltaTime;
+                    obj.properties.temperature = Math.max(obj.properties.temperature - tempDecrease, 0);
+                }
+                
+                if (obj.properties.isContainer && obj.properties.contents && obj.properties.contents.length > 0) {
+                    this.updateHeatingDuration(obj, deltaTime);
                 }
                 
                 this.updateEffects(obj);
                 
                 if (obj.properties.isContainer && obj.properties.contents && obj.properties.contents.length > 0) {
+                    const temp = obj.properties.temperature || 20;
+                    const contentTypes = obj.properties.contents.map(c => (c.type || '').toLowerCase());
+                    const hasGreenLiquid = contentTypes.some(type => type.includes('green_liquid'));
+                    const hasAcid = contentTypes.some(type => type.includes('acid'));
+                    
+                    if (hasGreenLiquid && temp < 85) {
+                        continue;
+                    }
+                    
+                    if (hasAcid && temp < 85) {
+                        const hasYellowPowder = contentTypes.some(type => type.includes('yellow_powder'));
+                        const hasBrownGas = contentTypes.some(type => type.includes('brown_gas'));
+                        if (!hasYellowPowder && !hasBrownGas) {
+                            continue;
+                        }
+                    }
+                    
                     if (this.canReactionProceed(obj)) {
                         const reaction = this.checkChemicalReaction(obj);
                         if (reaction) {
@@ -1829,6 +1857,24 @@ export class ExperimentEngine {
                             });
                             
                             if (hasReactants && this.updateThrottleCounter % 30 === 0) {
+                                const reactionTemp = obj.properties.temperature || 20;
+                                if (reaction.minTemperature !== undefined && reactionTemp < reaction.minTemperature) {
+                                    continue;
+                                }
+                                if (reaction.targetTemperature !== undefined) {
+                                    const tolerance = 5;
+                                    const targetTemp = reaction.targetTemperature;
+                                    if (Math.abs(reactionTemp - targetTemp) > tolerance) {
+                                        continue;
+                                    }
+                                    if (reaction.minTimeAtTemperature !== undefined) {
+                                        const heatingKey = `${obj.name}_${targetTemp}`;
+                                        const duration = this.heatingDuration.get(heatingKey) || 0;
+                                        if (duration < reaction.minTimeAtTemperature) {
+                                            continue;
+                                        }
+                                    }
+                                }
                                 this.processChemicalReaction(obj, reaction);
                             }
                         }
@@ -1998,8 +2044,42 @@ export class ExperimentEngine {
                     }
                     
                     if (this.canReactionProceed(obj)) {
+                        const temp = obj.properties.temperature || 20;
+                        const contentTypes = obj.properties.contents.map(c => (c.type || '').toLowerCase());
+                        const hasGreenLiquid = contentTypes.some(type => type.includes('green_liquid'));
+                        const hasAcid = contentTypes.some(type => type.includes('acid'));
+                        
+                        if (hasGreenLiquid && temp < 85) {
+                            continue;
+                        }
+                        
+                        if (hasAcid && temp < 85) {
+                            const hasYellowPowder = contentTypes.some(type => type.includes('yellow_powder'));
+                            const hasBrownGas = contentTypes.some(type => type.includes('brown_gas'));
+                            if (!hasYellowPowder && !hasBrownGas) {
+                                continue;
+                            }
+                        }
+                        
                         const reaction = this.checkChemicalReaction(obj);
                         if (reaction) {
+                            if (reaction.minTemperature !== undefined && temp < reaction.minTemperature) {
+                                continue;
+                            }
+                            if (reaction.targetTemperature !== undefined) {
+                                const tolerance = 5;
+                                const targetTemp = reaction.targetTemperature;
+                                if (Math.abs(temp - targetTemp) > tolerance) {
+                                    continue;
+                                }
+                                if (reaction.minTimeAtTemperature !== undefined) {
+                                    const heatingKey = `${obj.name}_${targetTemp}`;
+                                    const duration = this.heatingDuration.get(heatingKey) || 0;
+                                    if (duration < reaction.minTimeAtTemperature) {
+                                        continue;
+                                    }
+                                }
+                            }
                             this.processChemicalReaction(obj, reaction);
                         }
                     }
@@ -2019,6 +2099,17 @@ export class ExperimentEngine {
         this.handleSwirling();
         this.checkPourConditions();
         this.handleCollisions();
+        
+        for (const [name, obj] of this.objects) {
+            if (obj.properties.isContainer) {
+                if (this.liquidMeshes.has(name)) {
+                    this.updateLiquidMesh(obj);
+                }
+                if (this.powderMeshes.has(name)) {
+                    this.updatePowderMesh(obj);
+                }
+            }
+        }
     }
     
     isObjectBeingDragged(obj) {
@@ -3619,6 +3710,36 @@ export class ExperimentEngine {
         const contentTypes = obj.properties.contents.map(c => (c.type || '').toLowerCase());
         const temp = obj.properties.temperature || 20;
         
+        if (temp < 30) {
+            const hasGreenLiquid = contentTypes.some(type => type.includes('green_liquid'));
+            const hasAcid = contentTypes.some(type => type.includes('acid'));
+            
+            if (hasGreenLiquid) {
+                for (const reaction of reactions) {
+                    const reactants = reaction.reactants.map(r => r.toLowerCase());
+                    const hasGreenLiquidReactant = reactants.some(r => r.includes('green_liquid'));
+                    if (hasGreenLiquidReactant && (reaction.minTemperature !== undefined || reaction.targetTemperature !== undefined)) {
+                        return null;
+                    }
+                }
+            }
+            
+            if (hasAcid) {
+                const hasYellowPowder = contentTypes.some(type => type.includes('yellow_powder'));
+                const hasBrownGas = contentTypes.some(type => type.includes('brown_gas'));
+                if (!hasYellowPowder && !hasBrownGas) {
+                    for (const reaction of reactions) {
+                        const reactants = reaction.reactants.map(r => r.toLowerCase());
+                        const hasAcidReactant = reactants.some(r => r.includes('acid'));
+                        if (hasAcidReactant && (reaction.minTemperature !== undefined || reaction.targetTemperature !== undefined)) {
+                            console.log(`[Reaction Blocked] Acid reaction blocked at ${temp}°C (requires 90°C for 2 minutes)`);
+                            return null;
+                        }
+                    }
+                }
+            }
+        }
+        
         for (const reaction of reactions) {
             const reactants = reaction.reactants.map(r => r.toLowerCase());
             const hasAllReactants = reactants.every(reactant => 
@@ -3626,10 +3747,37 @@ export class ExperimentEngine {
             );
             
             if (hasAllReactants) {
-                if (reaction.minTemperature !== undefined && temp < reaction.minTemperature) {
+                if (reaction.minTemperature !== undefined) {
+                    if (temp < reaction.minTemperature) {
+                        continue;
+                    }
+                }
+                
+                if (reaction.maxTemperature !== undefined && temp > reaction.maxTemperature) {
                     continue;
                 }
-                if (reaction.maxTemperature !== undefined && temp > reaction.maxTemperature) {
+                
+                if (reaction.targetTemperature !== undefined) {
+                    const tolerance = 5;
+                    const targetTemp = reaction.targetTemperature;
+                    const tempDiff = Math.abs(temp - targetTemp);
+                    
+                    if (tempDiff > tolerance) {
+                        continue;
+                    }
+                    
+                    if (reaction.minTimeAtTemperature !== undefined) {
+                        const heatingKey = `${obj.name}_${targetTemp}`;
+                        const duration = this.heatingDuration.get(heatingKey) || 0;
+                        if (duration < reaction.minTimeAtTemperature) {
+                            continue;
+                        }
+                    }
+                } else if (reaction.minTimeAtTemperature !== undefined) {
+                    continue;
+                }
+                
+                if (reaction.minTemperature !== undefined && temp < reaction.minTemperature) {
                     continue;
                 }
                 
@@ -3638,6 +3786,27 @@ export class ExperimentEngine {
         }
         
         return null;
+    }
+    
+    updateHeatingDuration(obj, deltaTime) {
+        if (!obj.properties.isContainer) return;
+        
+        const temp = obj.properties.temperature || 20;
+        const targetTemps = [85, 90, 95, 100];
+        
+        for (const targetTemp of targetTemps) {
+            const tolerance = 5;
+            if (Math.abs(temp - targetTemp) <= tolerance) {
+                const heatingKey = `${obj.name}_${targetTemp}`;
+                const currentDuration = this.heatingDuration.get(heatingKey) || 0;
+                this.heatingDuration.set(heatingKey, currentDuration + deltaTime);
+            } else {
+                const heatingKey = `${obj.name}_${targetTemp}`;
+                if (this.heatingDuration.has(heatingKey)) {
+                    this.heatingDuration.delete(heatingKey);
+                }
+            }
+        }
     }
     
     canReactionProceed(obj) {
@@ -3723,6 +3892,43 @@ export class ExperimentEngine {
     processChemicalReaction(obj, reaction) {
         if (!reaction || !obj.properties.contents) return;
         
+        const temp = obj.properties.temperature || 20;
+        const contentTypes = obj.properties.contents.map(c => (c.type || '').toLowerCase());
+        const hasGreenLiquid = contentTypes.some(type => type.includes('green_liquid'));
+        const hasAcid = contentTypes.some(type => type.includes('acid'));
+        
+        if (hasGreenLiquid && temp < 85) {
+            console.log(`[Reaction Blocked] Green liquid reaction blocked at ${temp}°C (requires 90°C for 2 minutes)`);
+            return;
+        }
+        
+        if (hasAcid && temp < 85) {
+            const hasYellowPowder = contentTypes.some(type => type.includes('yellow_powder'));
+            const hasBrownGas = contentTypes.some(type => type.includes('brown_gas'));
+            if (!hasYellowPowder && !hasBrownGas) {
+                console.log(`[Reaction Blocked] Acid reaction blocked at ${temp}°C (requires 90°C for 2 minutes)`);
+                return;
+            }
+        }
+        
+        if (reaction.minTemperature !== undefined && temp < reaction.minTemperature) {
+            return;
+        }
+        if (reaction.targetTemperature !== undefined) {
+            const tolerance = 5;
+            const targetTemp = reaction.targetTemperature;
+            if (Math.abs(temp - targetTemp) > tolerance) {
+                return;
+            }
+            if (reaction.minTimeAtTemperature !== undefined) {
+                const heatingKey = `${obj.name}_${targetTemp}`;
+                const duration = this.heatingDuration.get(heatingKey) || 0;
+                if (duration < reaction.minTimeAtTemperature) {
+                    return;
+                }
+            }
+        }
+        
         const reactants = reaction.reactants.map(r => r.toLowerCase());
         
         const reactantContents = [];
@@ -3787,53 +3993,62 @@ export class ExperimentEngine {
             }
         });
         
-        if (reaction.result && hasReaction && (totalReactedVolume > 0.001 || totalReactedMass > 0.001)) {
-            const productType = reaction.result.type || 'product';
-            const productState = this.getChemicalState(productType);
+        if (hasReaction && (totalReactedVolume > 0.001 || totalReactedMass > 0.001)) {
+            const products = Array.isArray(reaction.products) ? reaction.products : 
+                           (reaction.result ? [reaction.result] : []);
             
-            const existingProduct = obj.properties.contents.find(
-                c => (c.type || '').toLowerCase() === productType.toLowerCase()
-            );
-            
-            const productAmount = totalReactedVolume > 0.001 ? totalReactedVolume : (totalReactedMass / 1.5);
-            
-            if (existingProduct) {
-                if (productState === 'solid') {
-                    existingProduct.mass = (existingProduct.mass || 0) + (productAmount * 0.5);
-                } else if (productState === 'gas') {
-                    existingProduct.volume = (existingProduct.volume || 0) + productAmount;
-                } else {
-                    existingProduct.volume = (existingProduct.volume || 0) + productAmount;
-                }
-            } else {
-                const newProduct = {
-                    type: productType,
-                    volume: productState === 'solid' ? 0 : productAmount,
-                    mass: productState === 'solid' ? (productAmount * 0.5) : undefined
-                };
-                obj.properties.contents.push(newProduct);
+            if (products.length === 0 && reaction.result) {
+                products.push(reaction.result);
             }
             
-            if (productType.toLowerCase() === 'co2' && productState === 'gas') {
-                if (liquidReactedVolume > 0.001) {
-                    const existingWater = obj.properties.contents.find(
-                        c => (c.type || '').toLowerCase() === 'water'
-                    );
-                    if (existingWater) {
-                        existingWater.volume = (existingWater.volume || 0) + liquidReactedVolume;
+            products.forEach(product => {
+                const productType = product.type || 'product';
+                const productState = this.getChemicalState(productType);
+                
+                const existingProduct = obj.properties.contents.find(
+                    c => (c.type || '').toLowerCase() === productType.toLowerCase()
+                );
+                
+                const productAmount = totalReactedVolume > 0.001 ? totalReactedVolume : (totalReactedMass / 1.5);
+                
+                if (existingProduct) {
+                    if (productState === 'solid') {
+                        existingProduct.mass = (existingProduct.mass || 0) + (productAmount * 0.5);
+                    } else if (productState === 'gas') {
+                        existingProduct.volume = (existingProduct.volume || 0) + productAmount;
                     } else {
-                        obj.properties.contents.push({ type: 'water', volume: liquidReactedVolume });
+                        existingProduct.volume = (existingProduct.volume || 0) + productAmount;
                     }
+                } else {
+                    const newProduct = {
+                        type: productType,
+                        volume: productState === 'solid' ? 0 : productAmount,
+                        mass: productState === 'solid' ? (productAmount * 0.5) : undefined
+                    };
+                    obj.properties.contents.push(newProduct);
                 }
                 
-                if (!this.effects.has(obj.name + '_smoke')) {
-                    this.createSmokeEffect(obj);
+                if (productType.toLowerCase() === 'co2' && productState === 'gas') {
+                    if (liquidReactedVolume > 0.001) {
+                        const existingWater = obj.properties.contents.find(
+                            c => (c.type || '').toLowerCase() === 'water'
+                        );
+                        if (existingWater) {
+                            existingWater.volume = (existingWater.volume || 0) + liquidReactedVolume;
+                        } else {
+                            obj.properties.contents.push({ type: 'water', volume: liquidReactedVolume });
+                        }
+                    }
+                    
+                    if (!this.effects.has(obj.name + '_smoke')) {
+                        this.createSmokeEffect(obj);
+                    }
+                } else if (productState === 'gas') {
+                    if (!this.effects.has(obj.name + '_smoke')) {
+                        this.createSmokeEffect(obj);
+                    }
                 }
-            } else if (productState === 'gas') {
-                if (!this.effects.has(obj.name + '_smoke')) {
-                    this.createSmokeEffect(obj);
-                }
-            }
+            });
         }
         
         if (hasReaction) {
@@ -3841,12 +4056,23 @@ export class ExperimentEngine {
                 obj.properties.reactedReactions = [];
             }
             
-            const hasReactedBefore = obj.properties.reactedReactions.some(r => r.type === reaction.result.type);
-            if (!hasReactedBefore) {
-                obj.properties.reactedReactions.push({
-                    type: reaction.result.type,
-                    timestamp: Date.now()
-                });
+            const products = Array.isArray(reaction.products) ? reaction.products : 
+                           (reaction.result ? [reaction.result] : []);
+            
+            let hasNewReaction = false;
+            products.forEach(product => {
+                const productType = product.type || (reaction.result ? reaction.result.type : 'product');
+                const hasReactedBefore = obj.properties.reactedReactions.some(r => r.type === productType);
+                if (!hasReactedBefore) {
+                    obj.properties.reactedReactions.push({
+                        type: productType,
+                        timestamp: Date.now()
+                    });
+                    hasNewReaction = true;
+                }
+            });
+            
+            if (hasNewReaction) {
                 this.addFeedback(reaction.message || 'Chemical reaction occurred');
             }
         }
@@ -3927,6 +4153,37 @@ export class ExperimentEngine {
                 result: { type: 'steam', color: 0xeeeeee },
                 message: 'Water heated to produce steam',
                 minTemperature: 100
+            },
+            {
+                reactants: ['green_liquid'],
+                products: [
+                    { type: 'yellow_powder', color: 0xffff00 },
+                    { type: 'brown_gas', color: 0x8b4513 }
+                ],
+                message: 'Green liquid decomposed to yellow powder and brown gas',
+                minTemperature: 85,
+                targetTemperature: 90,
+                minTimeAtTemperature: 120
+            },
+            {
+                reactants: ['acid'],
+                products: [
+                    { type: 'yellow_powder', color: 0xffff00 },
+                    { type: 'brown_gas', color: 0x8b4513 }
+                ],
+                message: 'Acid decomposed to yellow powder and brown gas',
+                minTemperature: 85,
+                targetTemperature: 90,
+                minTimeAtTemperature: 120
+            },
+            {
+                reactants: ['yellow_powder'],
+                products: [
+                    { type: 'blue_powder', color: 0x0000ff }
+                ],
+                message: 'Yellow powder turned blue as temperature cooled',
+                maxTemperature: 25,
+                targetTemperature: 20
             }
         ];
     }
@@ -3976,6 +4233,7 @@ export class ExperimentEngine {
             'sugar': 0xfff8dc,
             'alcohol': 0xfff8dc,
             'oil': 0xffd700,
+            'green_liquid': 0x00ff00,
             'copper': 0xb87333,
             'iron': 0x808080,
             'phenolphthalein': 0xffffff,
@@ -4414,12 +4672,22 @@ export class ExperimentEngine {
                 'copper': 0xb87333,
                 'iron': 0x808080,
                 'calcium': 0xffffff,
-                'sodium': 0xffffff
+                'sodium': 0xffffff,
+                'yellow_powder': 0xffff00,
+                'blue_powder': 0x0000ff
             };
             
             let powderColor = 0xcccccc;
+            const temp = obj.properties.temperature || 20;
             
-            if (this.config.powderColors && Array.isArray(this.config.powderColors)) {
+            const hasBluePowder = powderContents.some(c => (c.type || '').toLowerCase() === 'blue_powder');
+            const hasYellowPowder = powderContents.some(c => (c.type || '').toLowerCase() === 'yellow_powder');
+            
+            if (hasBluePowder) {
+                powderColor = 0x0000ff;
+            } else if (hasYellowPowder && temp <= 25) {
+                powderColor = 0xffff00;
+            } else if (this.config.powderColors && Array.isArray(this.config.powderColors)) {
                 const configColor = this.config.powderColors.find(pc => 
                     (pc.type || '').toLowerCase() === powderType
                 );
