@@ -3,11 +3,31 @@ $baseDir = __DIR__;
 $requestUri = $_SERVER['REQUEST_URI'];
 $requestPath = parse_url($requestUri, PHP_URL_PATH);
 
-$staticExtensions = ['css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'woff', 'woff2', 'ttf', 'eot', 'glb', 'json'];
+$staticExtensions = ['css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'woff', 'woff2', 'ttf', 'eot', 'glb'];
 $pathInfo = pathinfo($requestPath);
 $extension = isset($pathInfo['extension']) ? strtolower($pathInfo['extension']) : '';
 
+if ($extension === 'php') {
+    $filePath = $baseDir . $requestPath;
+    if (file_exists($filePath) && is_file($filePath)) {
+        if (strpos($requestPath, '/admin') === 0) {
+            chdir($baseDir . '/admin');
+        }
+        $_SERVER['SCRIPT_NAME'] = $requestPath;
+        $_SERVER['PHP_SELF'] = $requestPath;
+        require $filePath;
+        return true;
+    }
+}
+
 if (in_array($extension, $staticExtensions)) {
+    $filePath = $baseDir . $requestPath;
+    if (file_exists($filePath) && is_file($filePath)) {
+        return false;
+    }
+}
+
+if ($extension === 'json') {
     $filePath = $baseDir . $requestPath;
     if (file_exists($filePath) && is_file($filePath)) {
         return false;

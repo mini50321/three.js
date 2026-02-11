@@ -1200,6 +1200,10 @@
                 
                 updateMeasurements();
                 setupStudentControls();
+                
+                if (engine && engine.setTimerRunningCallback) {
+                    engine.setTimerRunningCallback(() => timerRunning);
+                }
             } catch (error) {
                 console.error('Failed to load experiment:', error);
                 document.getElementById('experiment-title').textContent = 'Error Loading Experiment';
@@ -1637,6 +1641,9 @@
                                 timeInput.value = timerSeconds;
                             }
                         }, 1000);
+                        if (engine && engine.setTimerRunningCallback) {
+                            engine.setTimerRunningCallback(() => timerRunning);
+                        }
                     }
                 });
             }
@@ -1648,6 +1655,9 @@
                         if (timerInterval) {
                             clearInterval(timerInterval);
                             timerInterval = null;
+                        }
+                        if (engine && engine.setTimerRunningCallback) {
+                            engine.setTimerRunningCallback(() => timerRunning);
                         }
                     }
                 });
@@ -1664,6 +1674,9 @@
                     updateTimerDisplay();
                     if (timeInput) {
                         timeInput.value = 0;
+                    }
+                    if (engine && engine.setTimerRunningCallback) {
+                        engine.setTimerRunningCallback(() => timerRunning);
                     }
                 });
             }

@@ -1724,6 +1724,7 @@ export class ExperimentEngine {
         }
         
         this.updateFireEffects();
+        this.updateParticles();
        
         this.renderer.render(this.scene, this.camera);
         
@@ -1860,6 +1861,31 @@ export class ExperimentEngine {
                     const contentTypes = obj.properties.contents.map(c => (c.type || '').toLowerCase());
                     const hasGreenLiquid = contentTypes.some(type => type.includes('green_liquid'));
                     const hasAcid = contentTypes.some(type => type.includes('acid'));
+                    
+                    if (hasAcid && temp >= 90) {
+                        const hasBrownGas = contentTypes.some(type => type.includes('brown_gas'));
+                        if (!hasBrownGas) {
+                            const acidContent = obj.properties.contents.find(c => (c.type || '').toLowerCase().includes('acid'));
+                            if (acidContent && acidContent.volume > 0) {
+                                const brownGasVolume = Math.max(acidContent.volume * 0.3, 0.01);
+                                obj.properties.contents.push({ type: 'brown_gas', volume: brownGasVolume, mass: 0 });
+                                
+                                if (this.updateLiquidMesh) {
+                                    this.updateLiquidMesh(obj);
+                                }
+                                
+                                if (this.effects.has(obj.name + '_smoke')) {
+                                    this.removeSmokeEffect(obj);
+                                }
+                                
+                                this.createSmokeEffect(obj);
+                            }
+                        } else {
+                            if (!this.effects.has(obj.name + '_smoke')) {
+                                this.createSmokeEffect(obj);
+                            }
+                        }
+                    }
                     
                     if (hasGreenLiquid && temp < 85) {
                         continue;
@@ -3066,8 +3092,20 @@ export class ExperimentEngine {
         }
         
         const hasGas = this.hasGasContent(obj);
+        const gasContents = this.getGasContent(obj);
+        const hasBrownGas = gasContents.some(c => (c.type || '').toLowerCase().includes('brown_gas'));
+        
         if (hasGas && !this.effects.has(obj.name + '_smoke')) {
             this.createSmokeEffect(obj);
+        } else if (hasGas && this.effects.has(obj.name + '_smoke') && hasBrownGas) {
+            const existingEffect = this.effects.get(obj.name + '_smoke');
+            if (existingEffect) {
+                const firstGas = gasContents.find(c => (c.type || '').toLowerCase().includes('brown_gas'));
+                if (firstGas) {
+                    this.removeSmokeEffect(obj);
+                    this.createSmokeEffect(obj);
+                }
+            }
         } else if (!hasGas && this.effects.has(obj.name + '_smoke')) {
             this.removeSmokeEffect(obj);
         }
@@ -3172,23 +3210,46 @@ export class ExperimentEngine {
         const defaultSmokeColor = 0xcccccc;
         let smokeColor = defaultSmokeColor;
         
-        if (gasType && this.config.smokeColors && Array.isArray(this.config.smokeColors)) {
+        if (gasType === 'brown_gas') {
+            smokeColor = 0x8b4513;
+        } else if (gasType && this.config.smokeColors && Array.isArray(this.config.smokeColors)) {
             const configColor = this.config.smokeColors.find(sc => 
                 (sc.type || '').toLowerCase() === gasType
             );
             if (configColor && configColor.color !== undefined) {
                 smokeColor = configColor.color;
             }
+        } else if (gasType) {
+            const reactions = this.getReactionRules();
+            for (const reaction of reactions) {
+                const products = Array.isArray(reaction.products) ? reaction.products : 
+                               (reaction.result ? [reaction.result] : []);
+                for (const product of products) {
+                    const productType = (product.type || '').toLowerCase();
+                    if (productType === gasType && product.color !== undefined) {
+                        smokeColor = product.color;
+                        break;
+                    }
+                }
+                if (smokeColor !== defaultSmokeColor) break;
+            }
         }
         
-        for (let i = 0; i < particleCount; i++) {
-            const size = 0.008 + Math.random() * 0.012;
+        const isBrownGas = gasType === 'brown_gas';
+        const baseOpacity = isBrownGas ? 0.7 : 0.15;
+        const opacityRange = isBrownGas ? 0.3 : 0.25;
+        const baseSize = isBrownGas ? 0.02 : 0.008;
+        const sizeRange = isBrownGas ? 0.03 : 0.012;
+        const finalParticleCount = isBrownGas ? Math.max(particleCount, 200) : particleCount;
+        
+        for (let i = 0; i < finalParticleCount; i++) {
+            const size = baseSize + Math.random() * sizeRange;
             const particle = new THREE.Mesh(
-                new THREE.SphereGeometry(size, 6, 6),
+                new THREE.SphereGeometry(size, 8, 8),
                 new THREE.MeshBasicMaterial({ 
-                    color: smokeColor,
+                    color: isBrownGas ? 0x8b4513 : smokeColor,
                     transparent: true, 
-                    opacity: 0.15 + Math.random() * 0.25
+                    opacity: baseOpacity + Math.random() * opacityRange
                 })
             );
             
@@ -3450,10 +3511,26 @@ export class ExperimentEngine {
                         userData.life <= 0;
                     
                     if (shouldRegenerate) {
-                        const size = 0.008 + Math.random() * 0.012;
+                        const gasContents = obj.properties.contents ? 
+                            obj.properties.contents.filter(c => this.getChemicalState(c.type) === 'gas' && (c.volume || 0) > 0.001) : [];
+                        const firstGas = gasContents.length > 0 ? gasContents[0] : null;
+                        const gasType = firstGas ? (firstGas.type || '').toLowerCase() : null;
+                        const isBrownGas = gasType === 'brown_gas';
+                        
+                        const baseSize = isBrownGas ? 0.012 : 0.008;
+                        const sizeRange = isBrownGas ? 0.018 : 0.012;
+                        const size = baseSize + Math.random() * sizeRange;
+                        
                         particle.geometry.dispose();
                         particle.geometry = new THREE.SphereGeometry(size, 6, 6);
-                        particle.material.opacity = 0.15 + Math.random() * 0.25;
+                        
+                        const baseOpacity = isBrownGas ? 0.4 : 0.15;
+                        const opacityRange = isBrownGas ? 0.4 : 0.25;
+                        particle.material.opacity = baseOpacity + Math.random() * opacityRange;
+                        
+                        if (isBrownGas) {
+                            particle.material.color.setHex(0x8b4513);
+                        }
                         
                         particle.position.set(
                             containerCenter.x + (Math.random() - 0.5) * sizeVec.x * 0.3,
@@ -4082,9 +4159,10 @@ export class ExperimentEngine {
                         this.createSmokeEffect(obj);
                     }
                 } else if (productState === 'gas') {
-                    if (!this.effects.has(obj.name + '_smoke')) {
-                        this.createSmokeEffect(obj);
+                    if (this.effects.has(obj.name + '_smoke')) {
+                        this.removeSmokeEffect(obj);
                     }
+                    this.createSmokeEffect(obj);
                 }
             });
         }
@@ -4718,12 +4796,18 @@ export class ExperimentEngine {
             let powderColor = 0xcccccc;
             const temp = obj.properties.temperature || 20;
             
-            const hasBluePowder = powderContents.some(c => (c.type || '').toLowerCase() === 'blue_powder');
-            const hasYellowPowder = powderContents.some(c => (c.type || '').toLowerCase() === 'yellow_powder');
+            const hasBluePowder = powderContents.some(c => {
+                const type = (c.type || '').toLowerCase();
+                return type === 'blue_powder' || type.includes('blue_powder');
+            });
+            const hasYellowPowder = powderContents.some(c => {
+                const type = (c.type || '').toLowerCase();
+                return type === 'yellow_powder' || type.includes('yellow_powder');
+            });
             
             if (hasBluePowder) {
                 powderColor = 0x0000ff;
-            } else if (hasYellowPowder && temp <= 25) {
+            } else if (hasYellowPowder) {
                 powderColor = 0xffff00;
             } else if (this.config.powderColors && Array.isArray(this.config.powderColors)) {
                 const configColor = this.config.powderColors.find(pc => 
@@ -4738,7 +4822,16 @@ export class ExperimentEngine {
                 powderColor = defaultPowderColorMap[powderType];
             }
             
+            if (powderType === 'yellow_powder' && !hasBluePowder) {
+                powderColor = 0xffff00;
+            }
+            
+            if (hasYellowPowder && !hasBluePowder) {
+                powderColor = 0xffff00;
+            }
+            
             powderMesh.material.color.setHex(powderColor);
+            powderMesh.material.needsUpdate = true;
         }
     }
 
