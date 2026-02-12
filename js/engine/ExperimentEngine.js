@@ -2007,12 +2007,7 @@ export class ExperimentEngine {
                                 } else {
                                     console.log(`[REACTION DEBUG] ${reactionName}: No targetTemperature requirement`);
                                 }
-                                if (this.updateThrottleCounter % 30 === 0) {
-                                    console.log(`[REACTION DEBUG] ${reactionName}: Processing reaction at ${reactionTemp}°C`);
-                                    this.processChemicalReaction(obj, reaction);
-                                } else {
-                                    console.log(`[REACTION DEBUG] ${reactionName}: Throttled (counter: ${this.updateThrottleCounter % 30}/30)`);
-                                }
+                                this.processChemicalReaction(obj, reaction);
                             }
                         }
                     }
@@ -4378,7 +4373,7 @@ export class ExperimentEngine {
             return;
         }
         
-        const reactionRate = 0.1;
+        const reactionRate = 1.0;
         let totalReactedVolume = 0;
         let totalReactedMass = 0;
         let liquidReactedVolume = 0;
