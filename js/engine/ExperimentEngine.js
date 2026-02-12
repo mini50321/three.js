@@ -1862,35 +1862,6 @@ export class ExperimentEngine {
                     const hasGreenLiquid = contentTypes.some(type => type.includes('green_liquid'));
                     const hasAcid = contentTypes.some(type => type.includes('acid'));
                     
-                    if (hasAcid && temp >= 90) {
-                        const hasBrownGas = contentTypes.some(type => type.includes('brown_gas'));
-                        console.log('[BROWN_GAS DEBUG] temp:', temp, 'hasAcid:', hasAcid, 'hasBrownGas:', hasBrownGas);
-                        if (!hasBrownGas) {
-                            const acidContent = obj.properties.contents.find(c => (c.type || '').toLowerCase().includes('acid'));
-                            if (acidContent && acidContent.volume > 0) {
-                                const brownGasVolume = Math.max(acidContent.volume * 0.3, 0.1);
-                                console.log('[BROWN_GAS DEBUG] Adding brown_gas, volume:', brownGasVolume);
-                                obj.properties.contents.push({ type: 'brown_gas', volume: brownGasVolume, mass: 0 });
-                                console.log('[BROWN_GAS DEBUG] Contents after adding:', obj.properties.contents.map(c => ({ type: c.type, volume: c.volume })));
-                                
-                                if (this.updateLiquidMesh) {
-                                    this.updateLiquidMesh(obj);
-                                }
-                                
-                                if (this.effects.has(obj.name + '_smoke')) {
-                                    this.removeSmokeEffect(obj);
-                                }
-                                
-                                setTimeout(() => {
-                                    this.createSmokeEffect(obj);
-                                }, 100);
-                            }
-                        } else {
-                            if (!this.effects.has(obj.name + '_smoke')) {
-                                this.createSmokeEffect(obj);
-                            }
-                        }
-                    }
                     
                     if (hasGreenLiquid && temp < 85) {
                         continue;
@@ -1922,25 +1893,45 @@ export class ExperimentEngine {
                             });
                             
                             if (hasReactants && this.updateThrottleCounter % 30 === 0) {
+                                console.log(`[REACTION CHECK] Found reaction: ${reaction.message || 'Unknown'}, hasReactants: ${hasReactants}`);
+                            }
+                            
+                            if (hasReactants) {
                                 const reactionTemp = obj.properties.temperature || 20;
+                                const reactionName = reaction.message || 'Unknown reaction';
+                                
                                 if (reaction.minTemperature !== undefined && reactionTemp < reaction.minTemperature) {
+                                    console.log(`[REACTION DEBUG] ${reactionName}: Temp ${reactionTemp}°C < min ${reaction.minTemperature}°C - BLOCKED`);
                                     continue;
                                 }
                                 if (reaction.targetTemperature !== undefined) {
                                     const tolerance = 5;
                                     const targetTemp = reaction.targetTemperature;
                                     if (Math.abs(reactionTemp - targetTemp) > tolerance) {
+                                        console.log(`[REACTION DEBUG] ${reactionName}: Temp ${reactionTemp}°C not within tolerance of ${targetTemp}°C - BLOCKED`);
                                         continue;
                                     }
                                     if (reaction.minTimeAtTemperature !== undefined) {
                                         const heatingKey = `${obj.name}_${targetTemp}`;
                                         const duration = this.heatingDuration.get(heatingKey) || 0;
+                                        console.log(`[REACTION DEBUG] ${reactionName}: Temp ${reactionTemp}°C, Duration at ${targetTemp}°C: ${duration.toFixed(2)}s / ${reaction.minTimeAtTemperature}s`);
                                         if (duration < reaction.minTimeAtTemperature) {
+                                            console.log(`[REACTION DEBUG] ${reactionName}: Duration ${duration.toFixed(2)}s < required ${reaction.minTimeAtTemperature}s - BLOCKED`);
                                             continue;
                                         }
+                                        console.log(`[REACTION DEBUG] ${reactionName}: All conditions met! Duration: ${duration.toFixed(2)}s >= ${reaction.minTimeAtTemperature}s - PROCEEDING`);
+                                    } else {
+                                        console.log(`[REACTION DEBUG] ${reactionName}: No minTimeAtTemperature requirement`);
                                     }
+                                } else {
+                                    console.log(`[REACTION DEBUG] ${reactionName}: No targetTemperature requirement`);
                                 }
-                                this.processChemicalReaction(obj, reaction);
+                                if (this.updateThrottleCounter % 30 === 0) {
+                                    console.log(`[REACTION DEBUG] ${reactionName}: Processing reaction at ${reactionTemp}°C`);
+                                    this.processChemicalReaction(obj, reaction);
+                                } else {
+                                    console.log(`[REACTION DEBUG] ${reactionName}: Throttled (counter: ${this.updateThrottleCounter % 30}/30)`);
+                                }
                             }
                         }
                     }
@@ -3118,8 +3109,14 @@ export class ExperimentEngine {
             this.removeSmokeEffect(obj);
         }
         
+        const contentTypes = obj.properties.contents ? obj.properties.contents.map(c => (c.type || '').toLowerCase()) : [];
+        const hasYellowPowder = contentTypes.some(type => type.includes('yellow_powder'));
+        const hasBrownGasFromReaction = contentTypes.some(type => type.includes('brown_gas'));
+        
         if (obj.properties.temperature > 80 && hasGas && !this.effects.has(obj.name + '_smoke')) {
-            this.createSmokeEffect(obj);
+            if (!hasBrownGasFromReaction) {
+                this.createSmokeEffect(obj);
+            }
         }
         
         const isFlammable = this.isFlammable(obj);
@@ -3210,9 +3207,6 @@ export class ExperimentEngine {
         const beakerTopY = maxYWorld - sizeVec.y * 0.02;
         const spawnY = liquidVolume > 0.001 ? liquidSurfaceY : beakerTopY;
         
-        console.log('[SMOKE DEBUG] Creating smoke effect for:', obj.name);
-        console.log('[SMOKE DEBUG] All contents:', obj.properties.contents ? obj.properties.contents.map(c => ({ type: c.type, volume: c.volume, mass: c.mass })) : []);
-        
         const gasContents = obj.properties.contents ? 
             obj.properties.contents.filter(c => {
                 const type = (c.type || '').toLowerCase();
@@ -3222,7 +3216,6 @@ export class ExperimentEngine {
                 const mass = c.mass || 0;
                 const hasAmount = volume > 0.001 || mass > 0.001;
                 const isGas = state === 'gas';
-                console.log('[SMOKE DEBUG] Checking content:', c.type, 'isBrownGas:', isBrownGas, 'state:', state, 'volume:', volume, 'mass:', mass, 'isGas:', isGas, 'hasAmount:', hasAmount, 'passes filter:', isGas && hasAmount);
                 return isGas && hasAmount;
             }) : [];
         const firstGas = gasContents.length > 0 ? gasContents[0] : null;
@@ -3232,9 +3225,6 @@ export class ExperimentEngine {
             const type = (c.type || '').toLowerCase();
             return type === 'brown_gas' || type.includes('brown_gas') || type.includes('brown');
         });
-        
-        console.log('[SMOKE DEBUG] Gas contents after filter:', gasContents.map(c => ({ type: c.type, volume: c.volume })));
-        console.log('[SMOKE DEBUG] hasBrownGas:', hasBrownGas, 'gasType:', gasType);
         
         console.log('[SMOKE DEBUG] Creating smoke effect for:', obj.name);
         console.log('[SMOKE DEBUG] Gas contents:', gasContents.map(c => ({ type: c.type, volume: c.volume })));
@@ -3271,13 +3261,11 @@ export class ExperimentEngine {
         }
         
         const isBrownGas = hasBrownGas || gasType === 'brown_gas' || (gasType && (gasType.includes('brown_gas') || gasType.includes('brown')));
-        console.log('[SMOKE DEBUG] isBrownGas:', isBrownGas);
-        const baseOpacity = isBrownGas ? 0.7 : 0.15;
-        const opacityRange = isBrownGas ? 0.3 : 0.25;
-        const baseSize = isBrownGas ? 0.02 : 0.008;
-        const sizeRange = isBrownGas ? 0.03 : 0.012;
-        const finalParticleCount = isBrownGas ? Math.max(particleCount, 200) : particleCount;
-        console.log('[SMOKE DEBUG] Creating', finalParticleCount, 'particles, isBrownGas:', isBrownGas);
+        const baseOpacity = isBrownGas ? 0.25 : 0.15;
+        const opacityRange = isBrownGas ? 0.15 : 0.25;
+        const baseSize = isBrownGas ? 0.006 : 0.008;
+        const sizeRange = isBrownGas ? 0.008 : 0.012;
+        const finalParticleCount = isBrownGas ? Math.min(particleCount, 60) : particleCount;
         
         const finalColor = isBrownGas ? 0x8b4513 : smokeColor;
         
@@ -3310,7 +3298,6 @@ export class ExperimentEngine {
                 particle.material.color.r = 139/255;
                 particle.material.color.g = 69/255;
                 particle.material.color.b = 19/255;
-                console.log('[SMOKE DEBUG] Particle', i, 'color set to brown:', particle.material.color.r, particle.material.color.g, particle.material.color.b);
             }
             
             particle.position.set(
@@ -3319,11 +3306,11 @@ export class ExperimentEngine {
                 containerCenter.z + (Math.random() - 0.5) * sizeVec.z * 0.3
             );
             
-            const baseVelocityY = 0.04 + Math.random() * 0.06;
+            const baseVelocityY = isBrownGas ? (0.02 + Math.random() * 0.03) : (0.04 + Math.random() * 0.06);
             particle.velocity = new THREE.Vector3(
-                (Math.random() - 0.5) * 0.02,
+                (Math.random() - 0.5) * (isBrownGas ? 0.01 : 0.02),
                 baseVelocityY,
-                (Math.random() - 0.5) * 0.02
+                (Math.random() - 0.5) * (isBrownGas ? 0.01 : 0.02)
             );
             
             particle.userData = {
@@ -3332,6 +3319,8 @@ export class ExperimentEngine {
                 baseY: spawnY,
                 spawnY: spawnY,
                 life: 1.0,
+                spawnTime: effect.time || 0,
+                wasBrownGas: isBrownGas,
                 turbulence: {
                     x: (Math.random() - 0.5) * 0.02,
                     z: (Math.random() - 0.5) * 0.02,
@@ -3553,6 +3542,22 @@ export class ExperimentEngine {
                 });
                 const isBrownGas = hasBrownGas;
                 
+                if (isBrownGas && obj.properties.contents) {
+                    const brownGasContent = obj.properties.contents.find(c => {
+                        const type = (c.type || '').toLowerCase();
+                        return type === 'brown_gas' || type.includes('brown_gas');
+                    });
+                    if (brownGasContent && brownGasContent.volume > 0) {
+                        brownGasContent.volume = Math.max(0, brownGasContent.volume - 0.0005);
+                        if (brownGasContent.volume <= 0.001) {
+                            const index = obj.properties.contents.indexOf(brownGasContent);
+                            if (index > -1) {
+                                obj.properties.contents.splice(index, 1);
+                            }
+                        }
+                    }
+                }
+                
                 if (isBrownGas && effect.particles.length > 0) {
                     const firstParticle = effect.particles[0];
                     const currentColor = firstParticle.material.color;
@@ -3580,34 +3585,90 @@ export class ExperimentEngine {
                     const currentSize = userData.baseSize * expansionFactor;
                     particle.scale.set(currentSize / userData.baseSize, currentSize / userData.baseSize, currentSize / userData.baseSize);
                     
-                    userData.life -= 0.0015;
-                    const fadeStart = 0.3;
+                    userData.life -= 0.003;
+                    const fadeStart = 0.4;
                     if (userData.life < fadeStart) {
                         particle.material.opacity = userData.baseOpacity * (userData.life / fadeStart);
                     }
                     
+                    const maxLifetime = isBrownGas ? 3.0 : 10.0;
+                    const particleAge = effect.time - (userData.spawnTime || 0);
                     const shouldRegenerate = particle.material.opacity < 0.01 || 
                         particle.position.y > maxHeight ||
                         userData.life <= 0;
                     
+                    if (isBrownGas && particleAge > maxLifetime) {
+                        particle.material.opacity = 0;
+                        particle.position.y = -1000;
+                        particle.velocity.multiplyScalar(0);
+                        return;
+                    }
+                    
                     if (shouldRegenerate) {
+                        if (userData.wasBrownGas) {
+                            const particleAge = effect.time - (userData.spawnTime || 0);
+                            if (particleAge > 3.0) {
+                                particle.material.opacity = 0;
+                                particle.position.y = -1000;
+                                particle.velocity.multiplyScalar(0);
+                                return;
+                            }
+                        }
+                        
                         const gasContents = obj.properties.contents ? 
-                            obj.properties.contents.filter(c => this.getChemicalState(c.type) === 'gas' && (c.volume || 0) > 0.001) : [];
+                            obj.properties.contents.filter(c => {
+                                const type = (c.type || '').toLowerCase();
+                                const isBrownGas = type === 'brown_gas' || type.includes('brown_gas');
+                                const state = isBrownGas ? 'gas' : this.getChemicalState(c.type);
+                                const volume = c.volume || 0;
+                                const mass = c.mass || 0;
+                                return state === 'gas' && (volume > 0.001 || mass > 0.001);
+                            }) : [];
                         const hasBrownGas = gasContents.some(c => {
                             const type = (c.type || '').toLowerCase();
                             return type === 'brown_gas' || type.includes('brown_gas') || type.includes('brown');
                         });
                         const isBrownGas = hasBrownGas;
                         
-                        const baseSize = isBrownGas ? 0.02 : 0.008;
-                        const sizeRange = isBrownGas ? 0.03 : 0.012;
+                        if (userData.wasBrownGas && !hasBrownGas) {
+                            particle.material.opacity = 0;
+                            particle.position.y = -1000;
+                            particle.velocity.multiplyScalar(0);
+                            return;
+                        }
+                        
+                        if (!hasBrownGas && userData.wasBrownGas) {
+                            particle.material.opacity = 0;
+                            particle.position.y = -1000;
+                            particle.velocity.multiplyScalar(0);
+                            return;
+                        }
+                        
+                        if (userData.wasBrownGas) {
+                            const particleAge = effect.time - (userData.spawnTime || 0);
+                            if (particleAge > 3.0) {
+                                particle.material.opacity = 0;
+                                particle.position.y = -1000;
+                                particle.velocity.multiplyScalar(0);
+                                return;
+                            }
+                            if (!hasBrownGas) {
+                                particle.material.opacity = 0;
+                                particle.position.y = -1000;
+                                particle.velocity.multiplyScalar(0);
+                                return;
+                            }
+                        }
+                        
+                        const baseSize = isBrownGas ? 0.006 : 0.008;
+                        const sizeRange = isBrownGas ? 0.008 : 0.012;
                         const size = baseSize + Math.random() * sizeRange;
                         
                         particle.geometry.dispose();
-                        particle.geometry = new THREE.SphereGeometry(size, 8, 8);
+                        particle.geometry = new THREE.SphereGeometry(size, 6, 6);
                         
-                        const baseOpacity = isBrownGas ? 0.7 : 0.15;
-                        const opacityRange = isBrownGas ? 0.3 : 0.25;
+                        const baseOpacity = isBrownGas ? 0.25 : 0.15;
+                        const opacityRange = isBrownGas ? 0.15 : 0.25;
                         const particleColor = isBrownGas ? 0x8b4513 : 0xcccccc;
                         
                         particle.material.dispose();
@@ -3631,11 +3692,11 @@ export class ExperimentEngine {
                             containerCenter.z + (Math.random() - 0.5) * sizeVec.z * 0.3
                         );
                         
-                        const baseVelocityY = 0.04 + Math.random() * 0.06;
+                        const baseVelocityY = isBrownGas ? (0.02 + Math.random() * 0.03) : (0.04 + Math.random() * 0.06);
                         particle.velocity.set(
-                            (Math.random() - 0.5) * 0.02,
+                            (Math.random() - 0.5) * (isBrownGas ? 0.01 : 0.02),
                             baseVelocityY,
-                            (Math.random() - 0.5) * 0.02
+                            (Math.random() - 0.5) * (isBrownGas ? 0.01 : 0.02)
                         );
                         
                         particle.scale.set(1, 1, 1);
@@ -3644,6 +3705,8 @@ export class ExperimentEngine {
                         userData.baseY = spawnY;
                         userData.spawnY = spawnY;
                         userData.life = 1.0;
+                        userData.spawnTime = effect.time;
+                        userData.wasBrownGas = isBrownGas;
                         userData.turbulence.phase = Math.random() * Math.PI * 2;
                     }
                 });
@@ -3955,6 +4018,7 @@ export class ExperimentEngine {
             );
             
             if (hasAllReactants) {
+                console.log(`[CHECK REACTION] Found matching reaction: ${reaction.message || 'Unknown'}, targetTemperature: ${reaction.targetTemperature}, minTimeAtTemperature: ${reaction.minTimeAtTemperature}, reactants: ${reactants.join(', ')}`);
                 if (reaction.minTemperature !== undefined) {
                     if (temp < reaction.minTemperature) {
                         continue;
@@ -3989,6 +4053,7 @@ export class ExperimentEngine {
                     continue;
                 }
                 
+                console.log(`[CHECK REACTION] Returning reaction: ${reaction.message || 'Unknown'}, targetTemperature: ${reaction.targetTemperature}, minTimeAtTemperature: ${reaction.minTimeAtTemperature}`);
                 return reaction;
             }
         }
@@ -4007,10 +4072,18 @@ export class ExperimentEngine {
             if (Math.abs(temp - targetTemp) <= tolerance) {
                 const heatingKey = `${obj.name}_${targetTemp}`;
                 const currentDuration = this.heatingDuration.get(heatingKey) || 0;
-                this.heatingDuration.set(heatingKey, currentDuration + deltaTime);
+                const newDuration = currentDuration + deltaTime;
+                this.heatingDuration.set(heatingKey, newDuration);
+                if (targetTemp === 90 && this.updateThrottleCounter % 60 === 0) {
+                    console.log(`[HEATING DEBUG] ${obj.name}: Temp ${temp.toFixed(1)}°C at target ${targetTemp}°C, Duration: ${newDuration.toFixed(2)}s`);
+                }
             } else {
                 const heatingKey = `${obj.name}_${targetTemp}`;
                 if (this.heatingDuration.has(heatingKey)) {
+                    const oldDuration = this.heatingDuration.get(heatingKey);
+                    if (targetTemp === 90 && oldDuration > 0) {
+                        console.log(`[HEATING DEBUG] ${obj.name}: Temp ${temp.toFixed(1)}°C moved away from ${targetTemp}°C, resetting duration (was ${oldDuration.toFixed(2)}s)`);
+                    }
                     this.heatingDuration.delete(heatingKey);
                 }
             }
@@ -4104,9 +4177,12 @@ export class ExperimentEngine {
         const contentTypes = obj.properties.contents.map(c => (c.type || '').toLowerCase());
         const hasGreenLiquid = contentTypes.some(type => type.includes('green_liquid'));
         const hasAcid = contentTypes.some(type => type.includes('acid'));
+        const reactionName = reaction.message || 'Unknown reaction';
+        
+        console.log(`[REACTION PROCESS] ${reactionName}: Starting at ${temp}°C`);
         
         if (hasGreenLiquid && temp < 85) {
-            console.log(`[Reaction Blocked] Green liquid reaction blocked at ${temp}°C (requires 90°C for 2 minutes)`);
+            console.log(`[REACTION PROCESS] ${reactionName}: Green liquid reaction blocked at ${temp}°C (requires 90°C for 2 minutes)`);
             return;
         }
         
@@ -4114,27 +4190,39 @@ export class ExperimentEngine {
             const hasYellowPowder = contentTypes.some(type => type.includes('yellow_powder'));
             const hasBrownGas = contentTypes.some(type => type.includes('brown_gas'));
             if (!hasYellowPowder && !hasBrownGas) {
-                console.log(`[Reaction Blocked] Acid reaction blocked at ${temp}°C (requires 90°C for 2 minutes)`);
+                console.log(`[REACTION PROCESS] ${reactionName}: Acid reaction blocked at ${temp}°C (requires 90°C for 2 minutes)`);
                 return;
             }
         }
         
         if (reaction.minTemperature !== undefined && temp < reaction.minTemperature) {
+            console.log(`[REACTION PROCESS] ${reactionName}: Temp ${temp}°C < min ${reaction.minTemperature}°C - BLOCKED`);
             return;
         }
         if (reaction.targetTemperature !== undefined) {
             const tolerance = 5;
             const targetTemp = reaction.targetTemperature;
+            console.log(`[REACTION PROCESS] ${reactionName}: Checking targetTemperature - temp: ${temp}°C, target: ${targetTemp}°C, tolerance: ${tolerance}°C`);
             if (Math.abs(temp - targetTemp) > tolerance) {
+                console.log(`[REACTION PROCESS] ${reactionName}: Temp ${temp}°C not within tolerance of ${targetTemp}°C - BLOCKED`);
                 return;
             }
+            console.log(`[REACTION PROCESS] ${reactionName}: Temperature check passed! ${temp}°C is within tolerance of ${targetTemp}°C`);
             if (reaction.minTimeAtTemperature !== undefined) {
                 const heatingKey = `${obj.name}_${targetTemp}`;
                 const duration = this.heatingDuration.get(heatingKey) || 0;
+                console.log(`[REACTION PROCESS] ${reactionName}: Checking duration - ${duration.toFixed(2)}s / ${reaction.minTimeAtTemperature}s (heatingKey: ${heatingKey})`);
+                console.log(`[REACTION PROCESS] ${reactionName}: All heating durations:`, Array.from(this.heatingDuration.entries()).map(([k, v]) => `${k}=${v.toFixed(2)}s`).join(', '));
                 if (duration < reaction.minTimeAtTemperature) {
+                    console.log(`[REACTION PROCESS] ${reactionName}: Duration ${duration.toFixed(2)}s < required ${reaction.minTimeAtTemperature}s - BLOCKED`);
                     return;
                 }
+                console.log(`[REACTION PROCESS] ${reactionName}: Duration check passed! ${duration.toFixed(2)}s >= ${reaction.minTimeAtTemperature}s`);
+            } else {
+                console.log(`[REACTION PROCESS] ${reactionName}: No minTimeAtTemperature requirement - proceeding`);
             }
+        } else {
+            console.log(`[REACTION PROCESS] ${reactionName}: No targetTemperature requirement - proceeding`);
         }
         
         const reactants = reaction.reactants.map(r => r.toLowerCase());
@@ -4221,9 +4309,11 @@ export class ExperimentEngine {
                 
                 if (existingProduct) {
                     if (productState === 'solid') {
-                        existingProduct.mass = (existingProduct.mass || 0) + (productAmount * 0.5);
+                        existingProduct.mass = (existingProduct.mass || 0) + (productAmount * 1.0);
+                        console.log(`[REACTION PROCESS] Added ${productAmount.toFixed(3)} to existing ${productType}, new mass: ${existingProduct.mass.toFixed(3)}`);
                     } else if (productState === 'gas') {
                         existingProduct.volume = (existingProduct.volume || 0) + productAmount;
+                        console.log(`[REACTION PROCESS] Added ${productAmount.toFixed(3)} to existing ${productType}, new volume: ${existingProduct.volume.toFixed(3)}`);
                     } else {
                         existingProduct.volume = (existingProduct.volume || 0) + productAmount;
                     }
@@ -4231,9 +4321,14 @@ export class ExperimentEngine {
                     const newProduct = {
                         type: productType,
                         volume: productState === 'solid' ? 0 : productAmount,
-                        mass: productState === 'solid' ? (productAmount * 0.5) : undefined
+                        mass: productState === 'solid' ? (productAmount * 1.0) : undefined
                     };
                     obj.properties.contents.push(newProduct);
+                    console.log(`[REACTION PROCESS] Created new ${productType}: ${productState}, amount: ${productState === 'solid' ? newProduct.mass.toFixed(3) : newProduct.volume.toFixed(3)}`);
+                }
+                
+                if (productState === 'solid' && this.updatePowderMesh) {
+                    this.updatePowderMesh(obj);
                 }
                 
                 if (productType.toLowerCase() === 'co2' && productState === 'gas') {
@@ -4302,9 +4397,116 @@ export class ExperimentEngine {
     }
 
     getReactionRules() {
+        const defaultReactions = [
+            {
+                reactants: ['acid', 'base'],
+                result: { type: 'salt', color: 0xffffff },
+                message: 'Acid and base neutralized to form salt'
+            },
+            {
+                reactants: ['acid', 'water'],
+                result: { type: 'acidic_solution', color: 0xff6666 },
+                message: 'Acid diluted in water'
+            },
+            {
+                reactants: ['base', 'water'],
+                result: { type: 'basic_solution', color: 0x6666ff },
+                message: 'Base diluted in water'
+            },
+            {
+                reactants: ['copper', 'acid'],
+                result: { type: 'copper_salt', color: 0x00ff00 },
+                message: 'Copper reacts with acid to form green salt'
+            },
+            {
+                reactants: ['iron', 'acid'],
+                result: { type: 'iron_salt', color: 0xffff00 },
+                message: 'Iron reacts with acid to form yellow salt'
+            },
+            {
+                reactants: ['phenolphthalein', 'base'],
+                result: { type: 'pink_solution', color: 0xff69b4 },
+                message: 'Phenolphthalein turns pink in base'
+            },
+            {
+                reactants: ['litmus', 'acid'],
+                result: { type: 'red_solution', color: 0xff0000 },
+                message: 'Litmus turns red in acid'
+            },
+            {
+                reactants: ['litmus', 'base'],
+                result: { type: 'blue_solution', color: 0x0000ff },
+                message: 'Litmus turns blue in base'
+            },
+            {
+                reactants: ['acid', 'carbonate'],
+                result: { type: 'co2', color: 0xcccccc },
+                message: 'Acid reacts with carbonate to produce carbon dioxide gas'
+            },
+            {
+                reactants: ['acid', 'metal'],
+                result: { type: 'hydrogen', color: 0xffffff },
+                message: 'Acid reacts with metal to produce hydrogen gas'
+            },
+            {
+                reactants: ['water', 'temperature'],
+                result: { type: 'steam', color: 0xeeeeee },
+                message: 'Water heated to produce steam',
+                minTemperature: 100
+            },
+            {
+                reactants: ['green_liquid'],
+                products: [
+                    { type: 'yellow_powder', color: 0xffff00 },
+                    { type: 'brown_gas', color: 0x8b4513 }
+                ],
+                message: 'Green liquid decomposed to yellow powder and brown gas',
+                minTemperature: 85,
+                targetTemperature: 90,
+                minTimeAtTemperature: 120
+            },
+            {
+                reactants: ['acid'],
+                products: [
+                    { type: 'yellow_powder', color: 0xffff00 },
+                    { type: 'brown_gas', color: 0x8b4513 }
+                ],
+                message: 'Acid decomposed to yellow powder and brown gas',
+                minTemperature: 85,
+                targetTemperature: 90,
+                minTimeAtTemperature: 120
+            },
+            {
+                reactants: ['yellow_powder'],
+                products: [
+                    { type: 'blue_powder', color: 0x0000ff }
+                ],
+                message: 'Yellow powder turned blue as temperature cooled',
+                maxTemperature: 25,
+                targetTemperature: 20
+            }
+        ];
+        
         if (this.config.reactions && Array.isArray(this.config.reactions)) {
-            return this.config.reactions;
+            console.log(`[REACTION RULES] Merging config reactions (${this.config.reactions.length}) with defaults`);
+            const mergedReactions = [...defaultReactions];
+            
+            for (const configReaction of this.config.reactions) {
+                const message = configReaction.message || '';
+                const existingIndex = mergedReactions.findIndex(r => (r.message || '') === message);
+                
+                if (existingIndex >= 0) {
+                    console.log(`[REACTION RULES] Merging config reaction: ${message}`);
+                    mergedReactions[existingIndex] = { ...mergedReactions[existingIndex], ...configReaction };
+                } else {
+                    console.log(`[REACTION RULES] Adding new config reaction: ${message}`);
+                    mergedReactions.push(configReaction);
+                }
+            }
+            
+            return mergedReactions;
         }
+        console.log(`[REACTION RULES] Using default hardcoded reactions only`);
         
         return [
             {
@@ -4836,10 +5038,10 @@ export class ExperimentEngine {
         
         const powderArea = Math.PI * powderRadius * powderRadius;
         const powderHeight = powderVolume / powderArea;
-        const maxHeight = size.y * 0.1;
+        const maxHeight = size.y * 0.3;
         const finalPowderHeight = Math.min(powderHeight, maxHeight);
         
-        if (finalPowderHeight <= 0) return;
+        if (finalPowderHeight <= 0.001) return;
         
         let powderMesh = this.powderMeshes.get(obj.name);
         
