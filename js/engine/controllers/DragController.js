@@ -111,6 +111,24 @@ export class DragController {
                 }
             }
             
+            const objName = this.activeObject.name.toLowerCase();
+            const isGlassRod = objName.includes('rod') || objName.includes('glass rod');
+            if (isGlassRod) {
+                const nearbyContainer = this.engine.findNearbyContainer(this.activeObject, 0.5);
+                if (nearbyContainer && nearbyContainer.properties.isContainer) {
+                    const wasStirring = nearbyContainer.properties.isBeingStirred;
+                    nearbyContainer.properties.isBeingStirred = true;
+                    nearbyContainer.properties.lastStirTime = performance.now();
+                    if (!wasStirring) {
+                        console.log(`[STIRRING DEBUG] Glass rod (${this.activeObject.name}) dragging near ${nearbyContainer.name}, starting stirring`);
+                    }
+                } else {
+                    if (this.engine.updateThrottleCounter && this.engine.updateThrottleCounter % 120 === 0) {
+                        console.log(`[STIRRING DEBUG] Glass rod (${this.activeObject.name}) dragging but no nearby container found`);
+                    }
+                }
+            }
+            
             if (this.engine.physicsEnabled && this.activeObject.physicsBody && this.engine.physicsManager) {
                 if (this.activeObject.centerOffset) {
                     const finalBox = new THREE.Box3().setFromObject(this.activeObject.mesh);
@@ -177,6 +195,19 @@ export class DragController {
         if (this.activeObject && this.engine.insertionController) {
             const event = new CustomEvent('objectPositionChanged', { detail: { object: this.activeObject } });
             document.dispatchEvent(event);
+        }
+        
+        if (this.activeObject) {
+            const objName = this.activeObject.name.toLowerCase();
+            const isGlassRod = objName.includes('rod') || objName.includes('glass rod');
+            if (isGlassRod) {
+                for (const [name, obj] of this.engine.objects) {
+                    if (obj.properties.isContainer && obj.properties.isBeingStirred) {
+                        console.log(`[STIRRING DEBUG] Glass rod drag ended, stopping stirring for ${obj.name}`);
+                        obj.properties.isBeingStirred = false;
+                    }
+                }
+            }
         }
         
         this.activeObject = null;

@@ -1204,6 +1204,9 @@
                 if (engine && engine.setTimerRunningCallback) {
                     engine.setTimerRunningCallback(() => timerRunning);
                 }
+                if (engine && engine.setTimerSecondsCallback) {
+                    engine.setTimerSecondsCallback(() => timerSeconds);
+                }
             } catch (error) {
                 console.error('Failed to load experiment:', error);
                 document.getElementById('experiment-title').textContent = 'Error Loading Experiment';
@@ -1659,6 +1662,9 @@
                         if (engine && engine.setTimerRunningCallback) {
                             engine.setTimerRunningCallback(() => timerRunning);
                         }
+                        if (engine && engine.setTimerSecondsCallback) {
+                            engine.setTimerSecondsCallback(() => timerSeconds);
+                        }
                     }
                 });
             }
@@ -1677,6 +1683,9 @@
                     }
                     if (engine && engine.setTimerRunningCallback) {
                         engine.setTimerRunningCallback(() => timerRunning);
+                    }
+                    if (engine && engine.setTimerSecondsCallback) {
+                        engine.setTimerSecondsCallback(() => timerSeconds);
                     }
                 });
             }

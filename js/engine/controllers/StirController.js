@@ -55,12 +55,34 @@ export class StirController {
             this.totalDistance = 0;
         }
         
+        const objName = this.activeObject.name.toLowerCase();
+        const isGlassRod = objName.includes('rod') || objName.includes('glass rod');
+        if (isGlassRod && distance > 0.01) {
+            const nearbyContainer = this.engine.findNearbyContainer(this.activeObject, 0.5);
+            if (nearbyContainer && nearbyContainer.properties.isContainer) {
+                if (!nearbyContainer.properties.isBeingStirred) {
+                    console.log(`[STIRRING DEBUG] Started stirring ${nearbyContainer.name}`);
+                }
+                nearbyContainer.properties.isBeingStirred = true;
+                nearbyContainer.properties.lastStirTime = performance.now();
+            }
+        }
+        
         this.lastPosition.copy(currentMouse);
     }
 
     end() {
         if (this.activeObject) {
             this.activeObject.properties.stirCount = this.stirCount;
+            
+            const objName = this.activeObject.name.toLowerCase();
+            const isGlassRod = objName.includes('rod') || objName.includes('glass rod');
+            if (isGlassRod) {
+                const nearbyContainer = this.engine.findNearbyContainer(this.activeObject, 0.5);
+                if (nearbyContainer && nearbyContainer.properties.isContainer) {
+                    nearbyContainer.properties.isBeingStirred = false;
+                }
+            }
             
             if (this.stirCount > 0 && this.activeObject.properties.isContainer) {
                 if (this.engine.markReactionReady) {

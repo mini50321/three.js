@@ -48,6 +48,12 @@ export class ExperimentEngine {
         this.heatingDuration = new Map();
         this.heatingStartTime = new Map();
         this.temperatureHeld = new Map();
+        this.timerRunningCallback = null;
+        this.timerSecondsCallback = null;
+        this.stirringDuration = new Map();
+        this.stirringStartTime = new Map();
+        this.timerStartTime = null;
+        this.timerPausedTime = null;
         this.measurements = {
             volume: {},
             mass: {},
@@ -82,6 +88,14 @@ export class ExperimentEngine {
         this.pendingPourObject = null;
         this.pendingStirObject = null;
         this.mouseDownPosition = null;
+        
+        this.setTimerRunningCallback = (callback) => {
+            this.timerRunningCallback = callback;
+        };
+        
+        this.setTimerSecondsCallback = (callback) => {
+            this.timerSecondsCallback = callback;
+        };
         
         this.init();
     }
@@ -1852,6 +1866,47 @@ export class ExperimentEngine {
                 
                 if (obj.properties.isContainer && obj.properties.contents && obj.properties.contents.length > 0) {
                     this.updateHeatingDuration(obj, deltaTime);
+                    this.updateStirringDuration(obj, deltaTime);
+                }
+                
+                for (const [name, otherObj] of this.objects) {
+                    if (otherObj === obj || !otherObj.mesh) continue;
+                    const otherName = otherObj.name.toLowerCase();
+                    const isGlassRod = otherName.includes('rod') || otherName.includes('glass rod');
+                    if (isGlassRod && obj.properties.isContainer) {
+                        otherObj.mesh.updateMatrixWorld(true);
+                        const nearbyContainer = this.findNearbyContainer(otherObj, 0.5);
+                        if (nearbyContainer === obj) {
+                            const currentTime = performance.now();
+                            
+                            if (!otherObj.userData) {
+                                otherObj.userData = {};
+                            }
+                            
+                            if (!obj.properties.isBeingStirred) {
+                                console.log(`[STIRRING DEBUG] Glass rod (${otherObj.name}) detected near ${obj.name}, starting stirring`);
+                            }
+                            obj.properties.isBeingStirred = true;
+                            obj.properties.lastStirTime = currentTime;
+                            
+                            if (!otherObj.userData.lastPosition) {
+                                otherObj.userData.lastPosition = otherObj.mesh.position.clone();
+                            }
+                            const hasPositionChanged = otherObj.mesh.position.distanceTo(otherObj.userData.lastPosition) > 0.001;
+                            if (hasPositionChanged) {
+                                otherObj.userData.lastPosition.copy(otherObj.mesh.position);
+                                otherObj.userData.lastPositionUpdate = currentTime;
+                            }
+                        } else {
+                            if (obj.properties.isBeingStirred) {
+                                const lastStirTime = obj.properties.lastStirTime || 0;
+                                const currentTime = performance.now();
+                                if ((currentTime - lastStirTime) > 1000) {
+                                    obj.properties.isBeingStirred = false;
+                                }
+                            }
+                        }
+                    }
                 }
                 
                 this.updateEffects(obj);
@@ -1914,12 +1969,38 @@ export class ExperimentEngine {
                                     if (reaction.minTimeAtTemperature !== undefined) {
                                         const heatingKey = `${obj.name}_${targetTemp}`;
                                         const duration = this.heatingDuration.get(heatingKey) || 0;
+                                        
+                                        const isTimerRunning = this.timerRunningCallback ? this.timerRunningCallback() : false;
+                                        const timerSeconds = this.timerSecondsCallback ? this.timerSecondsCallback() : 0;
+                                        
+                                        const stirringKey = `${obj.name}_stirring`;
+                                        const stirringDuration = this.stirringDuration.get(stirringKey) || 0;
+                                        
                                         console.log(`[REACTION DEBUG] ${reactionName}: Temp ${reactionTemp}°C, Duration at ${targetTemp}°C: ${duration.toFixed(2)}s / ${reaction.minTimeAtTemperature}s`);
+                                        console.log(`[REACTION DEBUG] ${reactionName}: Timer running: ${isTimerRunning}, Timer seconds: ${timerSeconds}s`);
+                                        console.log(`[REACTION DEBUG] ${reactionName}: Stirring duration: ${stirringDuration.toFixed(2)}s`);
+                                        
                                         if (duration < reaction.minTimeAtTemperature) {
                                             console.log(`[REACTION DEBUG] ${reactionName}: Duration ${duration.toFixed(2)}s < required ${reaction.minTimeAtTemperature}s - BLOCKED`);
                                             continue;
                                         }
-                                        console.log(`[REACTION DEBUG] ${reactionName}: All conditions met! Duration: ${duration.toFixed(2)}s >= ${reaction.minTimeAtTemperature}s - PROCEEDING`);
+                                        
+                                        if (!isTimerRunning) {
+                                            console.log(`[REACTION DEBUG] ${reactionName}: Timer not running - BLOCKED`);
+                                            continue;
+                                        }
+                                        
+                                        if (timerSeconds < reaction.minTimeAtTemperature) {
+                                            console.log(`[REACTION DEBUG] ${reactionName}: Timer insufficient time (${timerSeconds}s < ${reaction.minTimeAtTemperature}s) - BLOCKED`);
+                                            continue;
+                                        }
+                                        
+                                        if (stirringDuration < reaction.minTimeAtTemperature) {
+                                            console.log(`[REACTION DEBUG] ${reactionName}: Insufficient stirring duration (${stirringDuration.toFixed(2)}s < ${reaction.minTimeAtTemperature}s) - BLOCKED`);
+                                            continue;
+                                        }
+                                        
+                                        console.log(`[REACTION DEBUG] ${reactionName}: All conditions met! Temp: ${reactionTemp}°C, Duration: ${duration.toFixed(2)}s, Timer: ${timerSeconds}s, Stirring: ${stirringDuration.toFixed(2)}s - PROCEEDING`);
                                     } else {
                                         console.log(`[REACTION DEBUG] ${reactionName}: No minTimeAtTemperature requirement`);
                                     }
@@ -4090,6 +4171,42 @@ export class ExperimentEngine {
         }
     }
     
+    updateStirringDuration(obj, deltaTime) {
+        if (!obj.properties.isContainer) return;
+        
+        const isTimerRunning = this.timerRunningCallback ? this.timerRunningCallback() : false;
+        const isBeingStirred = obj.properties.isBeingStirred || false;
+        const lastStirTime = obj.properties.lastStirTime || 0;
+        const currentTime = performance.now();
+        
+        const stirringKey = `${obj.name}_stirring`;
+        
+        if (this.updateThrottleCounter % 120 === 0) {
+            console.log(`[STIRRING DEBUG] ${obj.name}: isBeingStirred=${isBeingStirred}, isTimerRunning=${isTimerRunning}, lastStirTime=${lastStirTime > 0 ? ((currentTime - lastStirTime) / 1000).toFixed(2) + 's ago' : 'never'}, currentDuration=${(this.stirringDuration.get(stirringKey) || 0).toFixed(2)}s`);
+        }
+        
+        if (isBeingStirred && isTimerRunning && (currentTime - lastStirTime) < 2000) {
+            const currentDuration = this.stirringDuration.get(stirringKey) || 0;
+            this.stirringDuration.set(stirringKey, currentDuration + deltaTime);
+            if (this.updateThrottleCounter % 60 === 0) {
+                console.log(`[STIRRING DEBUG] ${obj.name}: Accumulating stirring time, Duration: ${(currentDuration + deltaTime).toFixed(2)}s`);
+            }
+        } else {
+            if (obj.properties.isBeingStirred) {
+                if (!isTimerRunning) {
+                    if (this.updateThrottleCounter % 60 === 0) {
+                        console.log(`[STIRRING DEBUG] ${obj.name}: Timer not running, not accumulating stirring time`);
+                    }
+                } else if ((currentTime - lastStirTime) >= 2000) {
+                    obj.properties.isBeingStirred = false;
+                    if (this.updateThrottleCounter % 60 === 0) {
+                        console.log(`[STIRRING DEBUG] ${obj.name}: Stopped stirring - Last stir: ${((currentTime - lastStirTime) / 1000).toFixed(2)}s ago (>= 2s)`);
+                    }
+                }
+            }
+        }
+    }
+    
     canReactionProceed(obj) {
         if (!this.config.steps || !Array.isArray(this.config.steps) || this.config.steps.length === 0) {
             return true;
@@ -4211,13 +4328,34 @@ export class ExperimentEngine {
             if (reaction.minTimeAtTemperature !== undefined) {
                 const heatingKey = `${obj.name}_${targetTemp}`;
                 const duration = this.heatingDuration.get(heatingKey) || 0;
-                console.log(`[REACTION PROCESS] ${reactionName}: Checking duration - ${duration.toFixed(2)}s / ${reaction.minTimeAtTemperature}s (heatingKey: ${heatingKey})`);
-                console.log(`[REACTION PROCESS] ${reactionName}: All heating durations:`, Array.from(this.heatingDuration.entries()).map(([k, v]) => `${k}=${v.toFixed(2)}s`).join(', '));
+                
+                const isTimerRunning = this.timerRunningCallback ? this.timerRunningCallback() : false;
+                const timerSeconds = this.timerSecondsCallback ? this.timerSecondsCallback() : 0;
+                
+                const stirringKey = `${obj.name}_stirring`;
+                const stirringDuration = this.stirringDuration.get(stirringKey) || 0;
+                
+                console.log(`[REACTION PROCESS] ${reactionName}: Checking all conditions:`);
+                console.log(`[REACTION PROCESS] ${reactionName}: - Temperature duration: ${duration.toFixed(2)}s / ${reaction.minTimeAtTemperature}s`);
+                console.log(`[REACTION PROCESS] ${reactionName}: - Timer running: ${isTimerRunning}, Timer seconds: ${timerSeconds}s`);
+                console.log(`[REACTION PROCESS] ${reactionName}: - Stirring duration: ${stirringDuration.toFixed(2)}s`);
+                
                 if (duration < reaction.minTimeAtTemperature) {
-                    console.log(`[REACTION PROCESS] ${reactionName}: Duration ${duration.toFixed(2)}s < required ${reaction.minTimeAtTemperature}s - BLOCKED`);
+                    console.log(`[REACTION PROCESS] ${reactionName}: Temperature duration ${duration.toFixed(2)}s < required ${reaction.minTimeAtTemperature}s - BLOCKED`);
                     return;
                 }
-                console.log(`[REACTION PROCESS] ${reactionName}: Duration check passed! ${duration.toFixed(2)}s >= ${reaction.minTimeAtTemperature}s`);
+                
+                if (!isTimerRunning || timerSeconds < reaction.minTimeAtTemperature) {
+                    console.log(`[REACTION PROCESS] ${reactionName}: Timer not running or insufficient time (${timerSeconds}s < ${reaction.minTimeAtTemperature}s) - BLOCKED`);
+                    return;
+                }
+                
+                if (stirringDuration < reaction.minTimeAtTemperature) {
+                    console.log(`[REACTION PROCESS] ${reactionName}: Insufficient stirring duration (${stirringDuration.toFixed(2)}s < ${reaction.minTimeAtTemperature}s) - BLOCKED`);
+                    return;
+                }
+                
+                console.log(`[REACTION PROCESS] ${reactionName}: All conditions passed! Temp duration: ${duration.toFixed(2)}s, Timer: ${timerSeconds}s, Stirring: ${stirringDuration.toFixed(2)}s`);
             } else {
                 console.log(`[REACTION PROCESS] ${reactionName}: No minTimeAtTemperature requirement - proceeding`);
             }
