@@ -9,6 +9,8 @@ let initialStateIndex = 0;
 let reactionIndex = 0;
 let powderColorIndex = 0;
 let smokeColorIndex = 0;
+let chemicalOptionIndex = 0;
+let powderOptionIndex = 0;
 
 function addStep() {
     const div = document.createElement('div');
@@ -698,6 +700,154 @@ function loadSmokeColors(smokeColorsData) {
             `;
             container.appendChild(div);
             smokeColorIndex++;
+        });
+    }
+}
+
+function addChemicalOption() {
+    const div = document.createElement('div');
+    div.className = 'chemical-option-card';
+    div.style.cssText = 'background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e0e6ed;';
+    div.innerHTML = `
+        <div style="display: flex; gap: 15px; align-items: flex-end;">
+            <div class="form-group" style="flex: 1;">
+                <label>Chemical Name</label>
+                <input type="text" name="chemicalOptions[${chemicalOptionIndex}][name]" placeholder="e.g., Sulphuric acid, Water, Bunsen's reagent" required>
+                <small>Name of the chemical (will appear in dropdown)</small>
+            </div>
+            <div class="form-group" style="flex: 1;">
+                <label>Color (Hex)</label>
+                <input type="text" name="chemicalOptions[${chemicalOptionIndex}][color]" placeholder="#4a90e2" value="#4a90e2" pattern="#[0-9a-fA-F]{6}" required>
+                <small>Hex color code for this chemical</small>
+            </div>
+            <div>
+                <button type="button" onclick="this.closest('.chemical-option-card').remove()" class="btn btn-danger">Remove</button>
+            </div>
+        </div>
+    `;
+    const container = document.getElementById('chemical-options');
+    if (container) {
+        container.appendChild(div);
+        chemicalOptionIndex++;
+    }
+}
+
+function loadChemicalOptions(chemicalOptionsData) {
+    const container = document.getElementById('chemical-options');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    chemicalOptionIndex = 0;
+    
+    if (chemicalOptionsData && Array.isArray(chemicalOptionsData)) {
+        chemicalOptionsData.forEach((option) => {
+            const div = document.createElement('div');
+            div.className = 'chemical-option-card';
+            div.style.cssText = 'background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e0e6ed;';
+            const optionName = typeof option === 'string' ? option : (option.name || option.type || '');
+            let optionColor = '#4a90e2';
+            if (typeof option !== 'string' && option.color) {
+                if (typeof option.color === 'number') {
+                    optionColor = '#' + option.color.toString(16).padStart(6, '0');
+                } else {
+                    optionColor = option.color.startsWith('#') ? option.color : '#' + option.color;
+                }
+            } else if (typeof option === 'string') {
+                optionColor = '#4a90e2';
+            }
+            div.innerHTML = `
+                <div style="display: flex; gap: 15px; align-items: flex-end;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Chemical Name</label>
+                        <input type="text" name="chemicalOptions[${chemicalOptionIndex}][name]" value="${optionName}" placeholder="e.g., Sulphuric acid, Water, Bunsen's reagent" required>
+                        <small>Name of the chemical (will appear in dropdown)</small>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>Color (Hex)</label>
+                        <input type="text" name="chemicalOptions[${chemicalOptionIndex}][color]" value="${optionColor}" placeholder="#4a90e2" pattern="#[0-9a-fA-F]{6}" required>
+                        <small>Hex color code for this chemical</small>
+                    </div>
+                    <div>
+                        <button type="button" onclick="this.closest('.chemical-option-card').remove()" class="btn btn-danger">Remove</button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+            chemicalOptionIndex++;
+        });
+    }
+}
+
+function addPowderOption() {
+    const div = document.createElement('div');
+    div.className = 'powder-option-card';
+    div.style.cssText = 'background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e0e6ed;';
+    div.innerHTML = `
+        <div style="display: flex; gap: 15px; align-items: flex-end;">
+            <div class="form-group" style="flex: 1;">
+                <label>Powder/Crystal/Salt Name</label>
+                <input type="text" name="powderOptions[${powderOptionIndex}][name]" placeholder="e.g., Carbonate, Salt, Sugar" required>
+                <small>Name of the powder/crystal/salt (will appear in dropdown)</small>
+            </div>
+            <div class="form-group" style="flex: 1;">
+                <label>Color (Hex)</label>
+                <input type="text" name="powderOptions[${powderOptionIndex}][color]" placeholder="#ffffff" value="#ffffff" pattern="#[0-9a-fA-F]{6}" required>
+                <small>Hex color code for this powder</small>
+            </div>
+            <div>
+                <button type="button" onclick="this.closest('.powder-option-card').remove()" class="btn btn-danger">Remove</button>
+            </div>
+        </div>
+    `;
+    const container = document.getElementById('powder-options');
+    if (container) {
+        container.appendChild(div);
+        powderOptionIndex++;
+    }
+}
+
+function loadPowderOptions(powderOptionsData) {
+    const container = document.getElementById('powder-options');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    powderOptionIndex = 0;
+    
+    if (powderOptionsData && Array.isArray(powderOptionsData)) {
+        powderOptionsData.forEach((option) => {
+            const div = document.createElement('div');
+            div.className = 'powder-option-card';
+            div.style.cssText = 'background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e0e6ed;';
+            const optionName = typeof option === 'string' ? option : (option.name || option.type || '');
+            let optionColor = '#ffffff';
+            if (typeof option !== 'string' && option.color) {
+                if (typeof option.color === 'number') {
+                    optionColor = '#' + option.color.toString(16).padStart(6, '0');
+                } else {
+                    optionColor = option.color.startsWith('#') ? option.color : '#' + option.color;
+                }
+            } else if (typeof option === 'string') {
+                optionColor = '#ffffff';
+            }
+            div.innerHTML = `
+                <div style="display: flex; gap: 15px; align-items: flex-end;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Powder/Crystal/Salt Name</label>
+                        <input type="text" name="powderOptions[${powderOptionIndex}][name]" value="${optionName}" placeholder="e.g., Carbonate, Salt, Sugar" required>
+                        <small>Name of the powder/crystal/salt (will appear in dropdown)</small>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>Color (Hex)</label>
+                        <input type="text" name="powderOptions[${powderOptionIndex}][color]" value="${optionColor}" placeholder="#ffffff" pattern="#[0-9a-fA-F]{6}" required>
+                        <small>Hex color code for this powder</small>
+                    </div>
+                    <div>
+                        <button type="button" onclick="this.closest('.powder-option-card').remove()" class="btn btn-danger">Remove</button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+            powderOptionIndex++;
         });
     }
 }

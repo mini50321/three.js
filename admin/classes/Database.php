@@ -74,7 +74,9 @@ class Database {
                 'initialState' => $data['initialState'] ?? [],
                 'reactions' => $data['reactions'] ?? [],
                 'powderColors' => $data['powderColors'] ?? [],
-                'smokeColors' => $data['smokeColors'] ?? []
+                'smokeColors' => $data['smokeColors'] ?? [],
+                'chemicalOptions' => $data['chemicalOptions'] ?? [],
+                'powderOptions' => $data['powderOptions'] ?? []
             ]);
             
             $stmt->execute([
@@ -165,7 +167,9 @@ class Database {
                 'initialState' => $data['initialState'] ?? [],
                 'reactions' => $data['reactions'] ?? [],
                 'powderColors' => $data['powderColors'] ?? [],
-                'smokeColors' => $data['smokeColors'] ?? []
+                'smokeColors' => $data['smokeColors'] ?? [],
+                'chemicalOptions' => $data['chemicalOptions'] ?? [],
+                'powderOptions' => $data['powderOptions'] ?? []
             ]);
             
             $stmt->execute([
@@ -270,6 +274,8 @@ class Database {
         $exp['reactions'] = $config['reactions'] ?? [];
         $exp['powderColors'] = $config['powderColors'] ?? [];
         $exp['smokeColors'] = $config['smokeColors'] ?? [];
+        $exp['chemicalOptions'] = $config['chemicalOptions'] ?? [];
+        $exp['powderOptions'] = $config['powderOptions'] ?? [];
         
         $stepStmt = $this->db->prepare("
             SELECT * FROM experiment_steps 

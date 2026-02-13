@@ -4769,6 +4769,35 @@ export class ExperimentEngine {
         let baseColor = new THREE.Color(0x4a90e2);
         
         const reactions = this.getReactionRules();
+        
+        const getColorFromConfig = (contentType) => {
+            const lowerType = contentType.toLowerCase();
+            
+            if (this.config.chemicalOptions && Array.isArray(this.config.chemicalOptions)) {
+                for (const option of this.config.chemicalOptions) {
+                    const optionType = (option.type || option.name || '').toLowerCase();
+                    if (optionType === lowerType || lowerType.includes(optionType) || optionType.includes(lowerType)) {
+                        if (option.color !== undefined) {
+                            return new THREE.Color(option.color);
+                        }
+                    }
+                }
+            }
+            
+            if (this.config.powderOptions && Array.isArray(this.config.powderOptions)) {
+                for (const option of this.config.powderOptions) {
+                    const optionType = (option.type || option.name || '').toLowerCase();
+                    if (optionType === lowerType || lowerType.includes(optionType) || optionType.includes(lowerType)) {
+                        if (option.color !== undefined) {
+                            return new THREE.Color(option.color);
+                        }
+                    }
+                }
+            }
+            
+            return null;
+        };
+        
         const colorMap = {
             'water': 0x4a90e2,
             'acid': 0xff4444,
@@ -4846,18 +4875,24 @@ export class ExperimentEngine {
                 const colorStr = initialState.initialColor.startsWith('#') ? initialState.initialColor : '#' + initialState.initialColor;
                 baseColor = new THREE.Color(colorStr);
             } else {
-                // First, try to get color from any initial state that has this content type
-                const initialStateColor = getColorFromInitialState(contentType);
-                if (initialStateColor) {
-                    baseColor = initialStateColor;
+                // First, try to get color from config (chemicalOptions or powderOptions)
+                const configColor = getColorFromConfig(contentType);
+                if (configColor) {
+                    baseColor = configColor;
                 } else {
-                    const reactionForContent = reactions.find(r => 
-                        r.result && (r.result.type || '').toLowerCase() === contentType
-                    );
-                    if (reactionForContent && reactionForContent.result && reactionForContent.result.color !== undefined) {
-                        baseColor = new THREE.Color(reactionForContent.result.color);
+                    // Then try to get color from any initial state that has this content type
+                    const initialStateColor = getColorFromInitialState(contentType);
+                    if (initialStateColor) {
+                        baseColor = initialStateColor;
                     } else {
-                        baseColor = new THREE.Color(colorMap[contentType] || colorMap['water']);
+                        const reactionForContent = reactions.find(r => 
+                            r.result && (r.result.type || '').toLowerCase() === contentType
+                        );
+                        if (reactionForContent && reactionForContent.result && reactionForContent.result.color !== undefined) {
+                            baseColor = new THREE.Color(reactionForContent.result.color);
+                        } else {
+                            baseColor = new THREE.Color(colorMap[contentType] || colorMap['water']);
+                        }
                     }
                 }
             }
@@ -4905,17 +4940,22 @@ export class ExperimentEngine {
                     const type = (content.type || 'water').toLowerCase();
                     let color;
                     
-                    const initialStateColor = getColorFromInitialState(type);
-                    if (initialStateColor) {
-                        color = initialStateColor;
+                    const configColorForType = getColorFromConfig(type);
+                    if (configColorForType) {
+                        color = configColorForType;
                     } else {
-                        const reactionForContent = reactions.find(r => 
-                            r.result && (r.result.type || '').toLowerCase() === type
-                        );
-                        if (reactionForContent && reactionForContent.result && reactionForContent.result.color !== undefined) {
-                            color = new THREE.Color(reactionForContent.result.color);
+                        const initialStateColor = getColorFromInitialState(type);
+                        if (initialStateColor) {
+                            color = initialStateColor;
                         } else {
-                            color = new THREE.Color(colorMap[type] || colorMap['water']);
+                            const reactionForContent = reactions.find(r => 
+                                r.result && (r.result.type || '').toLowerCase() === type
+                            );
+                            if (reactionForContent && reactionForContent.result && reactionForContent.result.color !== undefined) {
+                                color = new THREE.Color(reactionForContent.result.color);
+                            } else {
+                                color = new THREE.Color(colorMap[type] || colorMap['water']);
+                            }
                         }
                     }
                     r += color.r * vol;

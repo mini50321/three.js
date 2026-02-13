@@ -1040,6 +1040,7 @@
                     <div style="display: flex; gap: 10px; align-items: stretch;">
                         <input type="number" id="chemical-amount" min="0" max="1000" value="50" step="10" placeholder="Amount (ml)" style="flex: 1; padding: 10px; background: #444; color: #fff; border: 1px solid #555; border-radius: 4px; box-sizing: border-box; font-size: 14px; height: 38px; line-height: 1;">
                         <button id="add-chemical-btn" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; height: 38px; line-height: 1;">Add</button>
+                        <button id="delete-chemical-btn" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; height: 38px; line-height: 1;">Del</button>
                     </div>
                 </div>
 
@@ -1055,6 +1056,7 @@
                     <div style="display: flex; gap: 10px; align-items: stretch;">
                         <input type="number" id="powder-amount" min="0" max="1000" value="10" step="1" placeholder="Volume (ml)" style="flex: 1; padding: 10px; background: #444; color: #fff; border: 1px solid #555; border-radius: 4px; box-sizing: border-box; font-size: 14px; height: 38px; line-height: 1;">
                         <button id="add-powder-btn" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; height: 38px; line-height: 1;">Add</button>
+                        <button id="delete-powder-btn" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; height: 38px; line-height: 1;">Del</button>
                     </div>
                 </div>
 
@@ -1133,6 +1135,32 @@
                 document.getElementById('experiment-title').textContent = experimentConfig.title;
                 document.getElementById('total-steps').textContent = experimentConfig.steps?.length || 0;
                 document.getElementById('max-score').textContent = experimentConfig.steps?.reduce((sum, step) => sum + (step.points || 10), 0) || 0;
+
+                const chemicalTypeSelect = document.getElementById('chemical-type');
+                if (chemicalTypeSelect && experimentConfig.chemicalOptions && Array.isArray(experimentConfig.chemicalOptions) && experimentConfig.chemicalOptions.length > 0) {
+                    chemicalTypeSelect.innerHTML = '';
+                    experimentConfig.chemicalOptions.forEach(option => {
+                        const optionElement = document.createElement('option');
+                        const optionName = option.name || option.type || option;
+                        const optionValue = option.type || option.name || option;
+                        optionElement.value = optionValue.toLowerCase();
+                        optionElement.textContent = optionName;
+                        chemicalTypeSelect.appendChild(optionElement);
+                    });
+                }
+
+                const powderTypeSelect = document.getElementById('powder-type');
+                if (powderTypeSelect && experimentConfig.powderOptions && Array.isArray(experimentConfig.powderOptions) && experimentConfig.powderOptions.length > 0) {
+                    powderTypeSelect.innerHTML = '';
+                    experimentConfig.powderOptions.forEach(option => {
+                        const optionElement = document.createElement('option');
+                        const optionName = option.name || option.type || option;
+                        const optionValue = option.type || option.name || option;
+                        optionElement.value = optionValue.toLowerCase();
+                        optionElement.textContent = optionName;
+                        powderTypeSelect.appendChild(optionElement);
+                    });
+                }
 
                 try {
                     engine = new ExperimentEngine('canvas-container', experimentConfig);
@@ -1487,6 +1515,74 @@
                 });
             }
 
+            const deleteChemicalBtn = document.getElementById('delete-chemical-btn');
+            if (deleteChemicalBtn && chemicalType) {
+                deleteChemicalBtn.addEventListener('click', () => {
+                    if (!engine || !engine.selectedObject) {
+                        alert('Please select a container first');
+                        return;
+                    }
+                    
+                    if (!engine.selectedObject.properties.isContainer) {
+                        alert('Selected object is not a container');
+                        return;
+                    }
+                    
+                    if (!engine.selectedObject.properties.contents || engine.selectedObject.properties.contents.length === 0) {
+                        alert('Container is empty');
+                        return;
+                    }
+                    
+                    const type = chemicalType.value;
+                    const amount = parseFloat(chemicalAmount.value) || 0;
+                    
+                    if (amount <= 0) {
+                        alert('Please enter a valid amount to delete');
+                        return;
+                    }
+                    
+                    const existing = engine.selectedObject.properties.contents.find(c => c.type === type && c.volume !== undefined);
+                    if (!existing) {
+                        alert(`${type} not found in container`);
+                        return;
+                    }
+                    
+                    if (existing.volume <= amount) {
+                        const index = engine.selectedObject.properties.contents.indexOf(existing);
+                        engine.selectedObject.properties.contents.splice(index, 1);
+                    } else {
+                        existing.volume = existing.volume - amount;
+                    }
+                    
+                    const newVolume = engine.calculateVolume(engine.selectedObject);
+                    engine.selectedObject.properties.volume = newVolume;
+                    
+                    if (engine.updateLiquidMesh) {
+                        engine.updateLiquidMesh(engine.selectedObject);
+                    }
+                    if (engine.updatePowderMesh) {
+                        engine.updatePowderMesh(engine.selectedObject);
+                    }
+                    if (engine.updateEffects) {
+                        engine.updateEffects(engine.selectedObject);
+                    }
+                    if (engine.updateMeasurements) {
+                        engine.updateMeasurements(engine.selectedObject);
+                    }
+                    
+                    const volumeInput = document.getElementById('volume-input');
+                    if (volumeInput) {
+                        volumeInput.value = Math.round(newVolume * 10) / 10;
+                    }
+                    
+                    if (typeof window.updateMeasurements === 'function') {
+                        window.updateMeasurements();
+                    }
+                    
+                    console.log(`Deleted ${amount}ml of ${type} from ${engine.selectedObject.name}. New volume: ${newVolume.toFixed(2)}ml`);
+                });
+            }
+
             const addPowderBtn = document.getElementById('add-powder-btn');
             const powderType = document.getElementById('powder-type');
             const powderAmount = document.getElementById('powder-amount');
@@ -1559,6 +1655,87 @@
                     }
                     
                     console.log(`Added ${volume}ml (${mass.toFixed(2)}g) of ${type} powder to ${engine.selectedObject.name}. New volume: ${newVolume.toFixed(2)}ml, Liquid volume: ${liquidVolume.toFixed(2)}ml`);
+                });
+            }
+
+            const deletePowderBtn = document.getElementById('delete-powder-btn');
+            if (deletePowderBtn && powderType) {
+                deletePowderBtn.addEventListener('click', () => {
+                    if (!engine || !engine.selectedObject) {
+                        alert('Please select a container first');
+                        return;
+                    }
+                    
+                    if (!engine.selectedObject.properties.isContainer) {
+                        alert('Selected object is not a container');
+                        return;
+                    }
+                    
+                    if (!engine.selectedObject.properties.contents || engine.selectedObject.properties.contents.length === 0) {
+                        alert('Container is empty');
+                        return;
+                    }
+                    
+                    const type = powderType.value;
+                    const volume = parseFloat(powderAmount.value) || 0;
+                    
+                    if (volume <= 0) {
+                        alert('Please enter a valid volume to delete');
+                        return;
+                    }
+                    
+                    const density = 1.5;
+                    const massToDelete = volume * density;
+                    
+                    const existing = engine.selectedObject.properties.contents.find(c => c.type === type && c.mass !== undefined);
+                    if (!existing) {
+                        alert(`${type} not found in container`);
+                        return;
+                    }
+                    
+                    if (existing.mass <= massToDelete) {
+                        const index = engine.selectedObject.properties.contents.indexOf(existing);
+                        engine.selectedObject.properties.contents.splice(index, 1);
+                    } else {
+                        existing.mass = existing.mass - massToDelete;
+                    }
+                    
+                    const newVolume = engine.calculateVolume(engine.selectedObject);
+                    engine.selectedObject.properties.volume = newVolume;
+                    
+                    if (engine.updatePowderMesh) {
+                        engine.updatePowderMesh(engine.selectedObject);
+                    }
+                    
+                    const liquidContents = engine.selectedObject.properties.contents ? 
+                        engine.selectedObject.properties.contents.filter(c => {
+                            const state = engine.getChemicalState ? engine.getChemicalState(c.type) : 'liquid';
+                            return state === 'liquid' && (c.volume || 0) > 0.001;
+                        }) : [];
+                    const liquidVolume = liquidContents.reduce((sum, c) => sum + (c.volume || 0), 0);
+                    
+                    if (engine.updateLiquidMesh) {
+                        engine.updateLiquidMesh(engine.selectedObject);
+                    }
+                    if (engine.updateEffects) {
+                        engine.updateEffects(engine.selectedObject);
+                    }
+                    if (engine.updateMeasurements) {
+                        const vol = engine.calculateVolume(engine.selectedObject);
+                        engine.measurements.volume[engine.selectedObject.name] = vol;
+                        engine.measurements.temperature[engine.selectedObject.name] = engine.selectedObject.properties.temperature;
+                    }
+                    
+                    const volumeInput = document.getElementById('volume-input');
+                    if (volumeInput) {
+                        volumeInput.value = Math.round(newVolume * 10) / 10;
+                    }
+                    
+                    if (typeof window.updateMeasurements === 'function') {
+                        window.updateMeasurements();
+                    }
+                    
+                    console.log(`Deleted ${volume}ml (${massToDelete.toFixed(2)}g) of ${type} powder from ${engine.selectedObject.name}. New volume: ${newVolume.toFixed(2)}ml, Liquid volume: ${liquidVolume.toFixed(2)}ml`);
                 });
             }
 

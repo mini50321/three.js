@@ -126,6 +126,20 @@
                     <button type="button" onclick="addSmokeColor()" class="btn btn-secondary">+ Add Smoke Color</button>
                 </div>
 
+                <h3 style="margin-top: 30px;">Chemical Options</h3>
+                <p style="color: #7f8c8d; font-size: 14px; margin-bottom: 15px;">Configure the available options in the "Add Chemical" dropdown. Each chemical can have its own color.</p>
+                <div id="chemical-options"></div>
+                <div style="margin-top: 15px;">
+                    <button type="button" onclick="addChemicalOption()" class="btn btn-secondary">+ Add Chemical Option</button>
+                </div>
+
+                <h3 style="margin-top: 30px;">Powder/Crystal/Salt Options</h3>
+                <p style="color: #7f8c8d; font-size: 14px; margin-bottom: 15px;">Configure the available options in the "Add Powder/Crystals/Salt" dropdown. Each powder can have its own color.</p>
+                <div id="powder-options"></div>
+                <div style="margin-top: 15px;">
+                    <button type="button" onclick="addPowderOption()" class="btn btn-secondary">+ Add Powder Option</button>
+                </div>
+
                 <h3 style="margin-top: 30px;">Experiment Steps</h3>
                 <div id="steps"></div>
 

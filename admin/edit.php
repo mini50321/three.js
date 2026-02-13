@@ -209,6 +209,78 @@ if (!$exp) {
                     });
                 </script>
 
+                <h3 style="margin-top: 30px;">Chemical Options</h3>
+                <p style="color: #7f8c8d; font-size: 14px; margin-bottom: 15px;">Configure the available options in the "Add Chemical" dropdown. Each chemical can have its own color.</p>
+                <div id="chemical-options"></div>
+                <div style="margin-top: 15px;">
+                    <button type="button" onclick="addChemicalOption()" class="btn btn-secondary">+ Add Chemical Option</button>
+                </div>
+                <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const chemicalOptionsData = <?php
+                            $chemicalOptionsForJS = [];
+                            if (!empty($exp['chemicalOptions']) && is_array($exp['chemicalOptions'])) {
+                                foreach ($exp['chemicalOptions'] as $option) {
+                                    $color = isset($option['color']) ? $option['color'] : 0x4a90e2;
+                                    if (is_numeric($color)) {
+                                        $colorHex = '#' . str_pad(dechex($color), 6, '0', STR_PAD_LEFT);
+                                    } else {
+                                        $colorHex = $color;
+                                        if (!$colorHex || !$colorHex[0] === '#') {
+                                            $colorHex = '#' . ltrim($colorHex, '#');
+                                        }
+                                    }
+                                    $chemicalOptionsForJS[] = [
+                                        'name' => $option['name'] ?? $option['type'] ?? '',
+                                        'type' => $option['type'] ?? strtolower($option['name'] ?? ''),
+                                        'color' => $colorHex
+                                    ];
+                                }
+                            }
+                            echo json_encode($chemicalOptionsForJS, JSON_HEX_APOS | JSON_HEX_QUOT);
+                        ?>;
+                        if (typeof loadChemicalOptions === 'function') {
+                            loadChemicalOptions(chemicalOptionsData);
+                        }
+                    });
+                </script>
+
+                <h3 style="margin-top: 30px;">Powder/Crystal/Salt Options</h3>
+                <p style="color: #7f8c8d; font-size: 14px; margin-bottom: 15px;">Configure the available options in the "Add Powder/Crystals/Salt" dropdown. Each powder can have its own color.</p>
+                <div id="powder-options"></div>
+                <div style="margin-top: 15px;">
+                    <button type="button" onclick="addPowderOption()" class="btn btn-secondary">+ Add Powder Option</button>
+                </div>
+                <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const powderOptionsData = <?php
+                            $powderOptionsForJS = [];
+                            if (!empty($exp['powderOptions']) && is_array($exp['powderOptions'])) {
+                                foreach ($exp['powderOptions'] as $option) {
+                                    $color = isset($option['color']) ? $option['color'] : 0xffffff;
+                                    if (is_numeric($color)) {
+                                        $colorHex = '#' . str_pad(dechex($color), 6, '0', STR_PAD_LEFT);
+                                    } else {
+                                        $colorHex = $color;
+                                        if (!$colorHex || !$colorHex[0] === '#') {
+                                            $colorHex = '#' . ltrim($colorHex, '#');
+                                        }
+                                    }
+                                    $powderOptionsForJS[] = [
+                                        'name' => $option['name'] ?? $option['type'] ?? '',
+                                        'type' => $option['type'] ?? strtolower($option['name'] ?? ''),
+                                        'color' => $colorHex
+                                    ];
+                                }
+                            }
+                            echo json_encode($powderOptionsForJS, JSON_HEX_APOS | JSON_HEX_QUOT);
+                        ?>;
+                        if (typeof loadPowderOptions === 'function') {
+                            loadPowderOptions(powderOptionsData);
+                        }
+                    });
+                </script>
+
                 <h3 style="margin-top: 30px;">Experiment Steps</h3>
                 <div id="steps">
                 <?php foreach ($exp['steps'] as $i => $s): ?>

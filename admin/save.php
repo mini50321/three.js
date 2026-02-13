@@ -168,6 +168,38 @@ if ($_POST['mode'] === 'create') {
         }
     }
 
+    $chemicalOptions = [];
+    if (!empty($_POST['chemicalOptions']) && is_array($_POST['chemicalOptions'])) {
+        foreach ($_POST['chemicalOptions'] as $option) {
+            if (!empty($option['name'])) {
+                $colorStr = !empty($option['color']) ? ltrim($option['color'], '#') : '4a90e2';
+                $color = hexdec($colorStr);
+                
+                $chemicalOptions[] = [
+                    'name' => trim($option['name']),
+                    'type' => strtolower(trim($option['name'])),
+                    'color' => $color
+                ];
+            }
+        }
+    }
+
+    $powderOptions = [];
+    if (!empty($_POST['powderOptions']) && is_array($_POST['powderOptions'])) {
+        foreach ($_POST['powderOptions'] as $option) {
+            if (!empty($option['name'])) {
+                $colorStr = !empty($option['color']) ? ltrim($option['color'], '#') : 'ffffff';
+                $color = hexdec($colorStr);
+                
+                $powderOptions[] = [
+                    'name' => trim($option['name']),
+                    'type' => strtolower(trim($option['name'])),
+                    'color' => $color
+                ];
+            }
+        }
+    }
+
     $experimentData = [
         "id" => uniqid("exp_"),
         "title" => $_POST['title'],
@@ -178,7 +210,9 @@ if ($_POST['mode'] === 'create') {
         "initialState" => $initialState,
         "reactions" => $reactions,
         "powderColors" => $powderColors,
-        "smokeColors" => $smokeColors
+        "smokeColors" => $smokeColors,
+        "chemicalOptions" => $chemicalOptions,
+        "powderOptions" => $powderOptions
     ];
 
     try {
@@ -359,6 +393,38 @@ if ($_POST['mode'] === 'create') {
         }
     }
 
+    $chemicalOptions = [];
+    if (!empty($_POST['chemicalOptions']) && is_array($_POST['chemicalOptions'])) {
+        foreach ($_POST['chemicalOptions'] as $option) {
+            if (!empty($option['name'])) {
+                $colorStr = !empty($option['color']) ? ltrim($option['color'], '#') : '4a90e2';
+                $color = hexdec($colorStr);
+                
+                $chemicalOptions[] = [
+                    'name' => trim($option['name']),
+                    'type' => strtolower(trim($option['name'])),
+                    'color' => $color
+                ];
+            }
+        }
+    }
+
+    $powderOptions = [];
+    if (!empty($_POST['powderOptions']) && is_array($_POST['powderOptions'])) {
+        foreach ($_POST['powderOptions'] as $option) {
+            if (!empty($option['name'])) {
+                $colorStr = !empty($option['color']) ? ltrim($option['color'], '#') : 'ffffff';
+                $color = hexdec($colorStr);
+                
+                $powderOptions[] = [
+                    'name' => trim($option['name']),
+                    'type' => strtolower(trim($option['name'])),
+                    'color' => $color
+                ];
+            }
+        }
+    }
+
     $experimentData = [
         "title" => $_POST['title'],
         "subject" => $_POST['subject'],
@@ -368,7 +434,9 @@ if ($_POST['mode'] === 'create') {
         "initialState" => $initialState,
         "reactions" => $reactions,
         "powderColors" => $powderColors,
-        "smokeColors" => $smokeColors
+        "smokeColors" => $smokeColors,
+        "chemicalOptions" => $chemicalOptions,
+        "powderOptions" => $powderOptions
     ];
 
     try {
